@@ -252,6 +252,93 @@ document.addEventListener('DOMContentLoaded', async () => {
             alert('업무시간이 종료되었습니다. 신속한 퇴근을 독려합니다!');
             overtimeModal.classList.remove('active');
         });
+
+        // 나의 근태 기록 로드
+        let allUserLogs = [];
+        async function loadUserLogs() {
+            const tbody = document.getElementById('userLogTableBody');
+            if(!tbody) return;
+            
+            try {
+                const url = `${CONFIG.GAS_URL}?action=getStats&t=${Date.now()}`;
+                const response = await fetch(url);
+                const result = await response.json();
+                
+                if(result.status === 'success') {
+                    // 현재 사용자 기록만 필터링
+                    allUserLogs = result.data.filter(row => row.name === currentUser.name);
+                    renderUserLogs('all');
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:red;">불러오기 실패</td></tr>';
+                }
+            } catch(e) {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:red;">통신 오류</td></tr>';
+            }
+        }
+
+        function renderUserLogs(filterType) {
+            const tbody = document.getElementById('userLogTableBody');
+            if(!tbody) return;
+            
+            const formatTime = (timeStr) => {
+                if (!timeStr || timeStr === '-') return '-';
+                try {
+                    const d = new Date(timeStr);
+                    if (isNaN(d.getTime())) return timeStr;
+                    return d.toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', hour12: false });
+                } catch(e) { return timeStr; }
+            };
+            const formatOnlyDate = (timeStr) => {
+                if (!timeStr || timeStr === '-') return '-';
+                try {
+                    const d = new Date(timeStr);
+                    if (isNaN(d.getTime())) return timeStr;
+                    return d.toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul' });
+                } catch(e) { return timeStr; }
+            };
+
+            const now = new Date();
+            const startOfWeek = new Date(now);
+            startOfWeek.setDate(now.getDate() - now.getDay()); // Sunday as start
+            startOfWeek.setHours(0,0,0,0);
+            const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+            startOfMonth.setHours(0,0,0,0);
+
+            let html = '';
+            
+            allUserLogs.slice().reverse().forEach(row => {
+                let rowDate;
+                try {
+                    rowDate = new Date(row.date);
+                } catch(e) {}
+                
+                if (rowDate && !isNaN(rowDate.getTime())) {
+                    if (filterType === 'weekly' && rowDate < startOfWeek) return;
+                    if (filterType === 'monthly' && rowDate < startOfMonth) return;
+                }
+                
+                html += `
+                    <tr>
+                        <td style="white-space: nowrap;">${formatOnlyDate(row.date)}</td>
+                        <td style="white-space: nowrap;">${formatTime(row.bootTime)}</td>
+                        <td style="white-space: nowrap;">${formatTime(row.offTime)}</td>
+                        <td style="white-space: nowrap;">${row.overtime === 'Yes' ? '<span style="color:red;font-weight:bold;">신청</span>' : '미신청'}</td>
+                    </tr>
+                `;
+            });
+
+            if(!html) html = '<tr><td colspan="4" style="text-align:center;">기록이 없습니다.</td></tr>';
+            tbody.innerHTML = html;
+        }
+
+        const userLogFilter = document.getElementById('userLogFilter');
+        if (userLogFilter) {
+            userLogFilter.addEventListener('change', (e) => {
+                renderUserLogs(e.target.value);
+            });
+            // 초기 로드
+            loadUserLogs();
+        }
     }
 
 });

@@ -18,6 +18,33 @@
 
         <button id="offBtn" style="background-color: var(--error-color);">퇴근하기 (종료)</button>
         <button id="logoutBtn" class="secondary-button">로그아웃</button>
+
+        <!-- 나의 근태 기록 -->
+        <div class="user-logs-section" style="margin-top: 30px; text-align: left;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <h3 style="margin: 0; color: var(--primary-dark);">나의 근태 기록</h3>
+                <select id="userLogFilter" style="padding: 5px; border-radius: 5px; border: 1px solid var(--glass-border);">
+                    <option value="all">전체보기</option>
+                    <option value="weekly">이번 주</option>
+                    <option value="monthly">이번 달</option>
+                </select>
+            </div>
+            <div style="overflow-x: auto;">
+                <table id="userLogTable" style="width: 100%; font-size: 0.9em;">
+                    <thead>
+                        <tr>
+                            <th style="white-space: nowrap;">날짜</th>
+                            <th style="white-space: nowrap;">출근(PC 켠 시간)</th>
+                            <th style="white-space: nowrap;">퇴근(PC 끈 시간)</th>
+                            <th style="white-space: nowrap;">시간외근무</th>
+                        </tr>
+                    </thead>
+                    <tbody id="userLogTableBody">
+                        <tr><td colspan="4" style="text-align: center;">기록을 불러오는 중...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </div>
 
     <!-- 시간외근무 팝업 -->
