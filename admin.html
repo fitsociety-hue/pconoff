@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>관리자 대시보드</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="js/config.js"></script>
+    <style>
+        .filter-section {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .filter-section input[type="date"] {
+            padding: 8px;
+            border-radius: 8px;
+            border: 1px solid var(--glass-border);
+            background: rgba(255,255,255,0.7);
+        }
+    </style>
+</head>
+<body>
+    
+    <!-- 관리자 로그인 폼 -->
+    <div class="glass-container" id="adminLoginForm">
+        <h2>관리자 로그인</h2>
+        <div class="form-group">
+            <label for="adminId">아이디</label>
+            <input type="text" id="adminId" value="admin" readonly>
+        </div>
+        <div class="form-group">
+            <label for="adminPassword">비밀번호</label>
+            <input type="password" id="adminPassword" placeholder="관리자 비밀번호 (초기: 1107)">
+        </div>
+        <button id="adminLoginBtn">로그인</button>
+        <div class="link-text">
+            <a href="index.html">일반 사용자로 돌아가기</a>
+        </div>
+    </div>
+
+    <!-- 관리자 대시보드 -->
+    <div class="glass-container wide hidden" id="adminDashboard">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h2>관리자 대시보드</h2>
+            <div>
+                <button id="changePwdBtn" class="secondary-button" style="width: auto; padding: 6px 12px; margin-top: 0;">비밀번호 변경</button>
+                <button id="adminLogoutBtn" class="secondary-button" style="width: auto; padding: 6px 12px; margin-top: 0;">로그아웃</button>
+            </div>
+        </div>
+        
+        <div class="filter-section">
+            <input type="date" id="filterDate">
+            <button id="refreshBtn" style="width: 100px;">조회</button>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>날짜</th>
+                    <th>이름</th>
+                    <th>출근(PC 켠 시간)</th>
+                    <th>퇴근(PC 끈 시간)</th>
+                    <th>시간외근무 신청</th>
+                </tr>
+            </thead>
+            <tbody id="statsTableBody">
+                <!-- 데이터가 여기에 렌더링 됩니다 -->
+            </tbody>
+        </table>
+    </div>
+
+    <!-- 비밀번호 변경 모달 -->
+    <div class="modal-overlay" id="pwdModal">
+        <div class="modal-content">
+            <h3>관리자 비밀번호 변경</h3>
+            <div class="form-group">
+                <input type="password" id="oldPwd" placeholder="현재 비밀번호">
+            </div>
+            <div class="form-group">
+                <input type="password" id="newPwd" placeholder="새 비밀번호 (숫자 4자리 권장)">
+            </div>
+            <button id="savePwdBtn" style="margin-bottom: 10px;">변경 저장</button>
+            <button id="cancelPwdBtn" class="secondary-button">취소</button>
+        </div>
+    </div>
+
+    <script>
+        // 관리자 전용 로직
+        async function sha256(message) {
+            const msgBuffer = new TextEncoder().encode(message);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const adminLoginForm = document.getElementById('adminLoginForm');
+            const adminDashboard = document.getElementById('adminDashboard');
+            
+            // 로그인 상태 확인 (세션 스토리지 사용)
+            if (sessionStorage.getItem('adminLogged') === 'true') {
+                adminLoginForm.classList.add('hidden');
+                adminDashboard.classList.remove('hidden');
+                loadStats();
+            }
+
+            document.getElementById('adminLoginBtn').addEventListener('click', async () => {
+                const pwd = document.getElementById('adminPassword').value;
+                if(!pwd) return alert('비밀번호를 입력하세요.');
+                
+                document.getElementById('adminLoginBtn').disabled = true;
+                const hash = await sha256(pwd);
+
+                try {
+                    const response = await fetch(CONFIG.GAS_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: `action=adminLogin&adminId=admin&password=${encodeURIComponent(hash)}`
+                    });
+                    const result = await response.json();
+                    
+                    if(result.status === 'success') {
+                        sessionStorage.setItem('adminLogged', 'true');
+                        adminLoginForm.classList.add('hidden');
+                        adminDashboard.classList.remove('hidden');
+                        loadStats();
+                    } else {
+                        alert(result.message);
+                    }
+                } catch(e) {
+                    alert('서버 통신 오류');
+                } finally {
+                    document.getElementById('adminLoginBtn').disabled = false;
+                }
+            });
+
+            document.getElementById('adminLogoutBtn').addEventListener('click', () => {
+                sessionStorage.removeItem('adminLogged');
+                location.reload();
+            });
+
+            // 통계 데이터 로드
+            async function loadStats() {
+                const tbody = document.getElementById('statsTableBody');
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">데이터를 불러오는 중...</td></tr>';
+                
+                try {
+                    const response = await fetch(CONFIG.GAS_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: `action=getStats`
+                    });
+                    const result = await response.json();
+                    
+                    if(result.status === 'success') {
+                        renderTable(result.data);
+                    } else {
+                        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:red;">불러오기 실패</td></tr>';
+                    }
+                } catch(e) {
+                    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:red;">통신 오류</td></tr>';
+                }
+            }
+
+            function renderTable(data) {
+                const tbody = document.getElementById('statsTableBody');
+                const filterDate = document.getElementById('filterDate').value;
+                
+                let html = '';
+                // 최신순 정렬
+                data.reverse().forEach(row => {
+                    // 날짜 필터 적용
+                    if (filterDate && row.date !== filterDate) return;
+
+                    html += `
+                        <tr>
+                            <td>${row.date}</td>
+                            <td>${row.name}</td>
+                            <td>${row.bootTime || '-'}</td>
+                            <td>${row.offTime || '-'}</td>
+                            <td>${row.overtime === 'Yes' ? '<span style="color:red;font-weight:bold;">신청</span>' : '미신청'}</td>
+                        </tr>
+                    `;
+                });
+
+                if(!html) html = '<tr><td colspan="5" style="text-align:center;">데이터가 없습니다.</td></tr>';
+                tbody.innerHTML = html;
+            }
+
+            document.getElementById('refreshBtn').addEventListener('click', loadStats);
+
+            // 비밀번호 변경
+            const pwdModal = document.getElementById('pwdModal');
+            document.getElementById('changePwdBtn').addEventListener('click', () => {
+                pwdModal.classList.add('active');
+            });
+            document.getElementById('cancelPwdBtn').addEventListener('click', () => {
+                pwdModal.classList.remove('active');
+            });
+
+            document.getElementById('savePwdBtn').addEventListener('click', async () => {
+                const oldPwd = document.getElementById('oldPwd').value;
+                const newPwd = document.getElementById('newPwd').value;
+
+                if(!oldPwd || !newPwd) return alert('모두 입력해주세요.');
+
+                const oldHash = await sha256(oldPwd);
+                const newHash = await sha256(newPwd);
+
+                try {
+                    const response = await fetch(CONFIG.GAS_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: `action=changeAdminPassword&adminId=admin&oldPassword=${encodeURIComponent(oldHash)}&newPassword=${encodeURIComponent(newHash)}`
+                    });
+                    const result = await response.json();
+                    alert(result.message);
+                    if(result.status === 'success') {
+                        pwdModal.classList.remove('active');
+                        document.getElementById('oldPwd').value = '';
+                        document.getElementById('newPwd').value = '';
+                    }
+                } catch(e) {
+                    alert('오류 발생');
+                }
+            });
+        });
+    </script>
+</body>
+</html>

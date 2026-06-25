@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>근태 관리 - 대시보드</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="js/config.js"></script>
+</head>
+<body>
+    <div class="glass-container">
+        <h2>안녕하세요, <span id="userNameDisplay"></span>님</h2>
+        <div class="status-badge">오늘 출근이 기록되었습니다.</div>
+        
+        <div class="time-display" id="currentTime">
+            --:--:--
+        </div>
+
+        <button id="offBtn" style="background-color: var(--error-color);">퇴근하기 (종료)</button>
+        <button id="logoutBtn" class="secondary-button">로그아웃</button>
+    </div>
+
+    <!-- 시간외근무 팝업 -->
+    <div class="modal-overlay" id="overtimeModal">
+        <div class="modal-content">
+            <h3 style="color: var(--primary-dark);">시간외근무 안내</h3>
+            <p>18:10이 지났습니다.<br>시간외근무를 신청하시겠습니까?</p>
+            <div style="margin-top: 20px;">
+                <button id="applyOvertimeBtn" style="margin-bottom: 10px;">네, 신청합니다</button>
+                <button id="declineOvertimeBtn" class="secondary-button">아니요, 곧 퇴근합니다</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/main.js"></script>
+</body>
+</html>

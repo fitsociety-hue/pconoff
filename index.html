@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>근태 관리 - 로그인</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="js/config.js"></script>
+</head>
+<body>
+    <div class="glass-container" id="loginForm">
+        <h2>ON/OFF 로그인</h2>
+        <div class="form-group">
+            <label for="name">이름</label>
+            <input type="text" id="name" placeholder="이름을 입력하세요">
+        </div>
+        <div class="form-group">
+            <label for="password">비밀번호 (숫자 4자리)</label>
+            <input type="password" id="password" placeholder="예: 0579">
+        </div>
+        <button id="loginBtn">로그인</button>
+        <div class="link-text">
+            계정이 없으신가요? <a href="#" id="showRegisterBtn">회원가입</a><br><br>
+            <a href="admin.html">관리자 로그인</a>
+        </div>
+    </div>
+
+    <div class="glass-container hidden" id="registerForm">
+        <h2>회원가입</h2>
+        <div class="form-group">
+            <label for="regTeam">팀명</label>
+            <input type="text" id="regTeam" placeholder="소속 팀명을 입력하세요">
+        </div>
+        <div class="form-group">
+            <label for="regName">이름</label>
+            <input type="text" id="regName" placeholder="이름을 입력하세요">
+        </div>
+        <div class="form-group">
+            <label for="regRole">직원 (직급)</label>
+            <input type="text" id="regRole" placeholder="직급을 입력하세요 (예: 사회복지사)">
+        </div>
+        <div class="form-group">
+            <label for="regPassword">비밀번호 (숫자 4자리)</label>
+            <input type="password" id="regPassword" placeholder="0을 포함한 4자리 (예: 0579)">
+        </div>
+        <button id="registerBtn">회원가입</button>
+        <div class="link-text">
+            이미 계정이 있으신가요? <a href="#" id="showLoginBtn">로그인</a>
+        </div>
+    </div>
+
+    <script src="js/main.js"></script>
+</body>
+</html>
