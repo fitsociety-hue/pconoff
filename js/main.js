@@ -70,11 +70,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const hash = await sha256(password);
                 
                 try {
-                    const response = await fetch(CONFIG.GAS_URL, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                        body: `action=login&name=${encodeURIComponent(name)}&password=${encodeURIComponent(hash)}`
-                    });
+                    const url = `${CONFIG.GAS_URL}?action=login&name=${encodeURIComponent(name)}&password=${encodeURIComponent(hash)}&t=${Date.now()}`;
+                    const response = await fetch(url);
                     const result = await response.json();
                     
                     if (result.status === 'success') {
@@ -139,11 +136,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const hash = await sha256(password);
 
                 try {
-                    const response = await fetch(CONFIG.GAS_URL, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                        body: `action=register&team=${encodeURIComponent(team)}&name=${encodeURIComponent(name)}&role=${encodeURIComponent(role)}&password=${encodeURIComponent(hash)}`
-                    });
+                    const url = `${CONFIG.GAS_URL}?action=register&team=${encodeURIComponent(team)}&name=${encodeURIComponent(name)}&role=${encodeURIComponent(role)}&password=${encodeURIComponent(hash)}&t=${Date.now()}`;
+                    const response = await fetch(url);
                     const result = await response.json();
                     
                     if (result.status === 'success') {
@@ -183,11 +177,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         
         try {
-            const response = await fetch(CONFIG.GAS_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: `action=recordBoot&name=${encodeURIComponent(currentUser.name)}&bootTime=${encodeURIComponent(actualBootTime)}`
-            });
+            const url = `${CONFIG.GAS_URL}?action=recordBoot&name=${encodeURIComponent(currentUser.name)}&bootTime=${encodeURIComponent(actualBootTime)}&t=${Date.now()}`;
+            const response = await fetch(url);
             // 성공 여부 로깅 안함 (이미 등록되어 있으면 패스)
         } catch (e) {
             console.error(e);
@@ -204,11 +195,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 offBtn.textContent = '기록 중...';
 
                 try {
-                    const response = await fetch(CONFIG.GAS_URL, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                        body: `action=recordOff&name=${encodeURIComponent(currentUser.name)}&offTime=${encodeURIComponent(offTime)}`
-                    });
+                    const url = `${CONFIG.GAS_URL}?action=recordOff&name=${encodeURIComponent(currentUser.name)}&offTime=${encodeURIComponent(offTime)}&t=${Date.now()}`;
+                    const response = await fetch(url);
                     const result = await response.json();
                     if(result.status === 'success') {
                         alert('퇴근이 기록되었습니다. 수고하셨습니다!');
@@ -251,11 +239,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         document.getElementById('applyOvertimeBtn').addEventListener('click', async () => {
             try {
-                await fetch(CONFIG.GAS_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: `action=applyOvertime&name=${encodeURIComponent(currentUser.name)}`
-                });
+                const url = `${CONFIG.GAS_URL}?action=applyOvertime&name=${encodeURIComponent(currentUser.name)}&t=${Date.now()}`;
+                await fetch(url);
                 alert('시간외근무 신청이 완료되었습니다.');
                 overtimeModal.classList.remove('active');
             } catch(e) {

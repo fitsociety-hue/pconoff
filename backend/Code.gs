@@ -1,5 +1,13 @@
 function doPost(e) {
+  return ContentService.createTextOutput("POST requests are not supported. Use GET.");
+}
+
+function doGet(e) {
   var action = e.parameter.action;
+  
+  if (!action) {
+    return ContentService.createTextOutput("ON/OFF Monitoring API is active.");
+  }
   
   if (action == "register") {
     return registerUser(e);
@@ -20,11 +28,6 @@ function doPost(e) {
   }
   
   return ContentService.createTextOutput(JSON.stringify({"status": "error", "message": "Unknown action"})).setMimeType(ContentService.MimeType.JSON);
-}
-
-function doGet(e) {
-  // CORS 처리 및 기본 응답
-  return ContentService.createTextOutput("ON/OFF Monitoring API is active.");
 }
 
 function getSheet(sheetName) {

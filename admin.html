@@ -113,11 +113,8 @@
                 const hash = await sha256(pwd);
 
                 try {
-                    const response = await fetch(CONFIG.GAS_URL, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                        body: `action=adminLogin&adminId=admin&password=${encodeURIComponent(hash)}`
-                    });
+                    const url = `${CONFIG.GAS_URL}?action=adminLogin&adminId=admin&password=${encodeURIComponent(hash)}&t=${Date.now()}`;
+                    const response = await fetch(url);
                     const result = await response.json();
                     
                     if(result.status === 'success') {
@@ -146,11 +143,8 @@
                 tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">데이터를 불러오는 중...</td></tr>';
                 
                 try {
-                    const response = await fetch(CONFIG.GAS_URL, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                        body: `action=getStats`
-                    });
+                    const url = `${CONFIG.GAS_URL}?action=getStats&t=${Date.now()}`;
+                    const response = await fetch(url);
                     const result = await response.json();
                     
                     if(result.status === 'success') {
@@ -209,11 +203,8 @@
                 const newHash = await sha256(newPwd);
 
                 try {
-                    const response = await fetch(CONFIG.GAS_URL, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                        body: `action=changeAdminPassword&adminId=admin&oldPassword=${encodeURIComponent(oldHash)}&newPassword=${encodeURIComponent(newHash)}`
-                    });
+                    const url = `${CONFIG.GAS_URL}?action=changeAdminPassword&adminId=admin&oldPassword=${encodeURIComponent(oldHash)}&newPassword=${encodeURIComponent(newHash)}&t=${Date.now()}`;
+                    const response = await fetch(url);
                     const result = await response.json();
                     alert(result.message);
                     if(result.status === 'success') {
