@@ -8,7 +8,8 @@
     <script src="js/config.js"></script>
 </head>
 <body>
-    <div class="glass-container">
+    <div style="display: flex; flex-direction: column; gap: 20px; align-items: center; width: 100%; max-width: 800px; padding: 20px; box-sizing: border-box;">
+        <div class="glass-container wide" style="margin-bottom: 0;">
         <h2>안녕하세요, <span id="userNameDisplay"></span>님</h2>
         <div class="status-badge">오늘 출근이 기록되었습니다.</div>
         
@@ -18,9 +19,11 @@
 
         <button id="offBtn" style="background-color: var(--error-color);">퇴근하기 (종료)</button>
         <button id="logoutBtn" class="secondary-button">로그아웃</button>
+    </div>
 
-        <!-- 나의 근태 기록 -->
-        <div class="user-logs-section" style="margin-top: 30px; text-align: left;">
+    <!-- 나의 근태 기록 -->
+    <div class="glass-container wide">
+        <div class="user-logs-section" style="text-align: left;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                 <h3 style="margin: 0; color: var(--primary-dark);">나의 근태 기록</h3>
                 <select id="userLogFilter" style="padding: 5px; border-radius: 5px; border: 1px solid var(--glass-border);">

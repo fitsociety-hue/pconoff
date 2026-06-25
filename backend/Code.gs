@@ -4,6 +4,8 @@ function doPost(e) {
   var action = e.parameter.action;
   if (action == "uploadSeal") {
     return uploadSeal(e);
+  } else if (action == "recordOff") {
+    return recordOffTime(e);
   }
   return ContentService.createTextOutput("POST is only used for specific actions.");
 }
@@ -157,7 +159,8 @@ function recordBootTime(e) {
   
   // 이미 오늘자 기록이 있는지 확인
   for (var i = 1; i < data.length; i++) {
-    if (data[i][0] == dateStr && data[i][1] == name) {
+    var rowDateStr = data[i][0] instanceof Date ? Utilities.formatDate(data[i][0], Session.getScriptTimeZone(), "yyyy-MM-dd") : String(data[i][0]).substring(0, 10);
+    if (rowDateStr == dateStr && data[i][1] == name) {
       // 이미 부팅 기록이 있다면 업데이트하지 않고 기존 유지
       return ContentService.createTextOutput(JSON.stringify({"status": "success", "message": "이미 오늘 부팅 기록이 존재합니다."})).setMimeType(ContentService.MimeType.JSON);
     }
@@ -176,7 +179,8 @@ function recordOffTime(e) {
   var data = sheet.getDataRange().getValues();
   
   for (var i = data.length - 1; i >= 1; i--) {
-    if (data[i][0] == dateStr && data[i][1] == name) {
+    var rowDateStr = data[i][0] instanceof Date ? Utilities.formatDate(data[i][0], Session.getScriptTimeZone(), "yyyy-MM-dd") : String(data[i][0]).substring(0, 10);
+    if (rowDateStr == dateStr && data[i][1] == name) {
       sheet.getRange(i + 1, 4).setValue(offTime);
       return ContentService.createTextOutput(JSON.stringify({"status": "success", "message": "종료 시간 기록 완료"})).setMimeType(ContentService.MimeType.JSON);
     }
@@ -193,7 +197,8 @@ function applyOvertime(e) {
   var data = sheet.getDataRange().getValues();
   
   for (var i = data.length - 1; i >= 1; i--) {
-    if (data[i][0] == dateStr && data[i][1] == name) {
+    var rowDateStr = data[i][0] instanceof Date ? Utilities.formatDate(data[i][0], Session.getScriptTimeZone(), "yyyy-MM-dd") : String(data[i][0]).substring(0, 10);
+    if (rowDateStr == dateStr && data[i][1] == name) {
       sheet.getRange(i + 1, 5).setValue("Yes");
       return ContentService.createTextOutput(JSON.stringify({"status": "success", "message": "시간외근무 신청 완료"})).setMimeType(ContentService.MimeType.JSON);
     }

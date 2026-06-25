@@ -184,6 +184,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             console.error(e);
         }
 
+        // 브라우저/탭 종료 시 자동 퇴근 기록 (sendBeacon 사용)
+        window.addEventListener('beforeunload', () => {
+            const offTime = formatDateTime(new Date());
+            // navigator.sendBeacon은 POST 요청을 보내므로 Code.gs의 doPost에 recordOff를 추가해 두었음
+            const url = `${CONFIG.GAS_URL}?action=recordOff&name=${encodeURIComponent(currentUser.name)}&offTime=${encodeURIComponent(offTime)}&t=${Date.now()}`;
+            navigator.sendBeacon(url);
+        });
+
         // 퇴근 버튼 로직
         const offBtn = document.getElementById('offBtn');
         if (offBtn) {
