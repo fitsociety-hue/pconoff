@@ -225,3 +225,64 @@ tr:last-child td {
     margin-top: 5px;
     display: none;
 }
+
+/* Print Styles */
+@media print {
+    body {
+        background: white !important;
+        color: black !important;
+        display: block;
+    }
+    
+    .no-print, #adminLoginForm, .modal-overlay, button, .filter-section {
+        display: none !important;
+    }
+
+    .glass-container {
+        border: none !important;
+        box-shadow: none !important;
+        background: transparent !important;
+        max-width: 100% !important;
+        padding: 0 !important;
+    }
+
+    .print-only {
+        display: block !important;
+    }
+
+    @page {
+        size: A4;
+        margin: 20mm;
+    }
+
+    table {
+        border: 1px solid black;
+    }
+    th, td {
+        border: 1px solid black;
+        color: black;
+    }
+}
+
+.print-only {
+    display: none;
+}
+
+.seal-container {
+    position: relative;
+    display: inline-block;
+    text-align: right;
+    margin-top: 50px;
+    font-size: 24px;
+    font-weight: bold;
+}
+
+.seal-img {
+    position: absolute;
+    right: -20px;
+    top: -20px;
+    width: 80px;
+    height: 80px;
+    mix-blend-mode: multiply;
+    opacity: 0.9;
+}

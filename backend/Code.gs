@@ -1,5 +1,9 @@
 function doPost(e) {
-  return ContentService.createTextOutput("POST requests are not supported. Use GET.");
+  var action = e.parameter.action;
+  if (action == "uploadSeal") {
+    return uploadSeal(e);
+  }
+  return ContentService.createTextOutput("POST is only used for specific actions.");
 }
 
 function doGet(e) {
@@ -25,6 +29,8 @@ function doGet(e) {
     return applyOvertime(e);
   } else if (action == "getStats") {
     return getStats(e);
+  } else if (action == "getSeal") {
+    return getSeal(e);
   }
   
   return ContentService.createTextOutput(JSON.stringify({"status": "error", "message": "Unknown action"})).setMimeType(ContentService.MimeType.JSON);
@@ -195,4 +201,26 @@ function getStats(e) {
   }
   
   return ContentService.createTextOutput(JSON.stringify({"status": "success", "data": logs})).setMimeType(ContentService.MimeType.JSON);
+}
+
+function uploadSeal(e) {
+  var sealData = e.parameter.sealData;
+  var sheet = getSheet("AdminSettings");
+  var data = sheet.getDataRange().getValues();
+  
+  if (data.length > 1) {
+    sheet.getRange(2, 3).setValue(sealData);
+  }
+  return ContentService.createTextOutput(JSON.stringify({"status": "success"})).setMimeType(ContentService.MimeType.JSON);
+}
+
+function getSeal(e) {
+  var sheet = getSheet("AdminSettings");
+  var data = sheet.getDataRange().getValues();
+  
+  var sealData = "";
+  if (data.length > 1 && data[1].length >= 3) {
+    sealData = data[1][2];
+  }
+  return ContentService.createTextOutput(JSON.stringify({"status": "success", "sealData": sealData})).setMimeType(ContentService.MimeType.JSON);
 }
