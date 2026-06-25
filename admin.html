@@ -64,11 +64,11 @@
         <table id="statsTable">
             <thead>
                 <tr>
-                    <th>날짜</th>
-                    <th>이름</th>
-                    <th>출근(PC 켠 시간)</th>
-                    <th>퇴근(PC 끈 시간)</th>
-                    <th>시간외근무 신청</th>
+                    <th style="white-space: nowrap;">날짜</th>
+                    <th style="white-space: nowrap;">이름</th>
+                    <th style="white-space: nowrap;">출근(PC 켠 시간)</th>
+                    <th style="white-space: nowrap;">퇴근(PC 끈 시간)</th>
+                    <th style="white-space: nowrap;">시간외근무 신청</th>
                 </tr>
             </thead>
             <tbody id="statsTableBody">
@@ -181,19 +181,48 @@
                 const tbody = document.getElementById('statsTableBody');
                 const filterDate = document.getElementById('filterDate').value;
                 
+                const formatTime = (timeStr) => {
+                    if (!timeStr || timeStr === '-') return '-';
+                    try {
+                        const d = new Date(timeStr);
+                        if (isNaN(d.getTime())) return timeStr;
+                        return d.toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', hour12: false });
+                    } catch(e) { return timeStr; }
+                };
+                
+                const formatOnlyDate = (timeStr) => {
+                    if (!timeStr || timeStr === '-') return '-';
+                    try {
+                        const d = new Date(timeStr);
+                        if (isNaN(d.getTime())) return timeStr;
+                        return d.toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul' });
+                    } catch(e) { return timeStr; }
+                };
+                
+                const getFilterFormat = (timeStr) => {
+                    if (!timeStr || timeStr === '-') return '-';
+                    try {
+                        const d = new Date(timeStr);
+                        if (isNaN(d.getTime())) return timeStr;
+                        return d.toLocaleDateString('sv-SE', { timeZone: 'Asia/Seoul' });
+                    } catch(e) { return timeStr; }
+                };
+
                 let html = '';
                 // 최신순 정렬
                 data.reverse().forEach(row => {
+                    const rowFilterDate = getFilterFormat(row.date);
+                    
                     // 날짜 필터 적용
-                    if (filterDate && row.date !== filterDate) return;
+                    if (filterDate && rowFilterDate !== filterDate && row.date !== filterDate) return;
 
                     html += `
                         <tr>
-                            <td>${row.date}</td>
-                            <td>${row.name}</td>
-                            <td>${row.bootTime || '-'}</td>
-                            <td>${row.offTime || '-'}</td>
-                            <td>${row.overtime === 'Yes' ? '<span style="color:red;font-weight:bold;">신청</span>' : '미신청'}</td>
+                            <td style="white-space: nowrap;">${formatOnlyDate(row.date)}</td>
+                            <td style="white-space: nowrap; word-break: keep-all;">${row.name}</td>
+                            <td style="white-space: nowrap;">${formatTime(row.bootTime)}</td>
+                            <td style="white-space: nowrap;">${formatTime(row.offTime)}</td>
+                            <td style="white-space: nowrap;">${row.overtime === 'Yes' ? '<span style="color:red;font-weight:bold;">신청</span>' : '미신청'}</td>
                         </tr>
                     `;
                 });
