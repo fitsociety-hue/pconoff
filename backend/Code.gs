@@ -1,4 +1,6 @@
 function doPost(e) {
+  // 에디터에서 직접 실행할 경우 e가 undefined이므로 예외 처리
+  if (!e) return ContentService.createTextOutput("이 스크립트는 웹 앱으로 배포되어 호출되어야 합니다. 에디터에서 직접 실행할 수 없습니다.");
   var action = e.parameter.action;
   if (action == "uploadSeal") {
     return uploadSeal(e);
@@ -7,6 +9,8 @@ function doPost(e) {
 }
 
 function doGet(e) {
+  // 에디터에서 직접 실행할 경우 e가 undefined이므로 예외 처리
+  if (!e) return ContentService.createTextOutput("이 스크립트는 웹 앱으로 배포되어 호출되어야 합니다. 에디터에서 직접 실행할 수 없습니다.");
   var action = e.parameter.action;
   
   if (!action) {
@@ -43,16 +47,16 @@ function getSheet(sheetName) {
     sheet = doc.insertSheet(sheetName);
     if (sheetName === "Users") {
       sheet.appendRow(["Team", "Name", "Role", "Password", "IsAdmin"]);
-      // 기본 관리자 추가 (비밀번호: 1107의 SHA-256 해시값 필요 - 여기선 초기 설정용 임시값 또는 평문 저장이지만 프론트에서 해시해서 보냄)
-      // 프론트에서 '1107'을 해시해서 보내도록 해야함
+      // 기본 관리자 추가 (비밀번호: 2026의 SHA-256 해시값 필요)
+      // 프론트에서 '2026'을 해시해서 보내도록 해야함
     } else if (sheetName === "Logs") {
       sheet.appendRow(["Date", "Name", "BootTime", "OffTime", "OvertimeApplied"]);
     } else if (sheetName === "AdminSettings") {
       sheet.appendRow(["AdminId", "PasswordHash"]);
-      // 1107의 SHA-256 해시는 프론트에서 생성하는 값과 매칭해야 하므로, 초기엔 프론트에서 가입 시키거나 해시값을 넣어야함.
-      // 편의상 프론트엔드에서 admin 가입을 막고, 서버에서 검증 시 '1107' 해시값을 초기값으로 둡니다.
-      // 1107의 SHA256: e111a8818c6426372ce661a34bd3c60fcbb6eb6f157fdf3173323cdd224a1803
-      sheet.appendRow(["admin", "e111a8818c6426372ce661a34bd3c60fcbb6eb6f157fdf3173323cdd224a1803"]);
+      // 2026의 SHA-256 해시는 프론트에서 생성하는 값과 매칭해야 하므로, 초기엔 프론트에서 가입 시키거나 해시값을 넣어야함.
+      // 편의상 프론트엔드에서 admin 가입을 막고, 서버에서 검증 시 '2026' 해시값을 초기값으로 둡니다.
+      // 2026의 SHA256: 158a323a7ba44870f23d96f1516dd70aa48e9a72db4ebb026b0a89e212a208ab
+      sheet.appendRow(["admin", "158a323a7ba44870f23d96f1516dd70aa48e9a72db4ebb026b0a89e212a208ab"]);
     }
   }
   return sheet;
@@ -107,13 +111,14 @@ function adminLogin(e) {
   
   var storedHash = data[1][1];
   
-  // 기존의 잘못된 초기 해시값이 시트에 있는 경우 자동 복구
-  var wrongHash = "e111a8818c6426372ce661a34bd3c60fcbb6eb6f157fdf3173323cdd224a1803";
-  var correctHash1107 = "86cb35a822329fe1de40eb82a1791be1f66f8bd327446686bdd859a89e436853";
+  // 기존 초기 비밀번호(1107)에서 2026으로 변경 자동 적용 (구버전 해시값 자동 마이그레이션)
+  var oldHash1 = "e111a8818c6426372ce661a34bd3c60fcbb6eb6f157fdf3173323cdd224a1803";
+  var oldHash2 = "86cb35a822329fe1de40eb82a1791be1f66f8bd327446686bdd859a89e436853";
+  var newHash2026 = "158a323a7ba44870f23d96f1516dd70aa48e9a72db4ebb026b0a89e212a208ab";
   
-  if (storedHash === wrongHash && passwordHash === correctHash1107) {
-    sheet.getRange(2, 2).setValue(correctHash1107);
-    storedHash = correctHash1107;
+  if ((storedHash === oldHash1 || storedHash === oldHash2) && passwordHash === newHash2026) {
+    sheet.getRange(2, 2).setValue(newHash2026);
+    storedHash = newHash2026;
   }
   
   if (data.length > 1 && data[1][0] == adminId && storedHash == passwordHash) {
