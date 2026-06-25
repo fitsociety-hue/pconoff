@@ -31,6 +31,8 @@ function doGet(e) {
     return getStats(e);
   } else if (action == "getSeal") {
     return getSeal(e);
+  } else if (action == "getMyStats") {
+    return getMyStats(e);
   }
   
   return ContentService.createTextOutput(JSON.stringify({"status": "error", "message": "Unknown action"})).setMimeType(ContentService.MimeType.JSON);
@@ -105,8 +107,23 @@ function adminLogin(e) {
   var sheet = getSheet("AdminSettings");
   var data = sheet.getDataRange().getValues();
   
-  if (data.length > 1 && data[1][0] == adminId && data[1][1] == passwordHash) {
-    return ContentService.createTextOutput(JSON.stringify({"status": "success"})).setMimeType(ContentService.MimeType.JSON);
+  if (data.length > 1) {
+    var storedId = data[1][0];
+    var storedHash = data[1][1];
+    
+    // 자동 복구 로직: 관리자가 1107 입력 시 잘못된 구버전 해시가 저장되어 있다면 새 해시로 덮어쓰기
+    var correctHash1107 = "86cb35a822329fe1de40eb82a1791be1f66f8bd327446686bdd859a89e436853";
+    var oldBrokenHash = "e111a8818c6426372ce661a34bd3c60fcbb6eb6f157fdf3173323cdd224a1803";
+    
+    if (adminId == storedId) {
+      if (passwordHash == storedHash) {
+        return ContentService.createTextOutput(JSON.stringify({"status": "success"})).setMimeType(ContentService.MimeType.JSON);
+      } else if (passwordHash == correctHash1107 && storedHash == oldBrokenHash) {
+        // 복구 처리
+        sheet.getRange(2, 2).setValue(correctHash1107);
+        return ContentService.createTextOutput(JSON.stringify({"status": "success", "message": "초기 비밀번호 연동이 복구되었습니다."})).setMimeType(ContentService.MimeType.JSON);
+      }
+    }
   }
   return ContentService.createTextOutput(JSON.stringify({"status": "error", "message": "관리자 정보가 일치하지 않습니다."})).setMimeType(ContentService.MimeType.JSON);
 }
@@ -198,6 +215,26 @@ function getStats(e) {
       "offTime": logData[i][3],
       "overtime": logData[i][4]
     });
+  }
+  
+  return ContentService.createTextOutput(JSON.stringify({"status": "success", "data": logs})).setMimeType(ContentService.MimeType.JSON);
+}
+
+function getMyStats(e) {
+  var name = e.parameter.name;
+  var logSheet = getSheet("Logs");
+  var logData = logSheet.getDataRange().getValues();
+  var logs = [];
+  
+  for (var i = 1; i < logData.length; i++) {
+    if (logData[i][1] == name) {
+      logs.push({
+        "date": logData[i][0],
+        "bootTime": logData[i][2],
+        "offTime": logData[i][3],
+        "overtime": logData[i][4]
+      });
+    }
   }
   
   return ContentService.createTextOutput(JSON.stringify({"status": "success", "data": logs})).setMimeType(ContentService.MimeType.JSON);

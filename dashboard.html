@@ -17,7 +17,25 @@
         </div>
 
         <button id="offBtn" style="background-color: var(--error-color);">퇴근하기 (종료)</button>
-        <button id="logoutBtn" class="secondary-button">로그아웃</button>
+        <button id="logoutBtn" class="secondary-button" style="margin-bottom: 20px;">로그아웃</button>
+
+        <!-- 개인 기록 테이블 영역 -->
+        <h3 style="margin-top: 30px; border-top: 1px solid var(--glass-border); padding-top: 20px;">내 출퇴근 기록</h3>
+        <div style="max-height: 300px; overflow-y: auto; border-radius: 8px;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 14px; background: rgba(255,255,255,0.6);">
+                <thead>
+                    <tr>
+                        <th style="padding: 10px; background: rgba(255,255,255,0.8);">날짜</th>
+                        <th style="padding: 10px; background: rgba(255,255,255,0.8);">출근</th>
+                        <th style="padding: 10px; background: rgba(255,255,255,0.8);">퇴근</th>
+                        <th style="padding: 10px; background: rgba(255,255,255,0.8);">시간외</th>
+                    </tr>
+                </thead>
+                <tbody id="myStatsTableBody">
+                    <tr><td colspan="4" style="text-align:center; padding: 10px;">기록을 불러오는 중...</td></tr>
+                </tbody>
+            </table>
+        </div>
     </div>
 
     <!-- 시간외근무 팝업 -->
