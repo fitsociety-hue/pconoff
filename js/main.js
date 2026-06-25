@@ -252,40 +252,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             alert('업무시간이 종료되었습니다. 신속한 퇴근을 독려합니다!');
             overtimeModal.classList.remove('active');
         });
-
-        // 내 근태 기록 로드
-        async function loadMyStats() {
-            const tbody = document.getElementById('myStatsTableBody');
-            try {
-                const url = `${CONFIG.GAS_URL}?action=getMyStats&name=${encodeURIComponent(currentUser.name)}&t=${Date.now()}`;
-                const response = await fetch(url);
-                const result = await response.json();
-                
-                if(result.status === 'success') {
-                    let html = '';
-                    // 최신순 렌더링
-                    result.data.reverse().forEach(row => {
-                        html += `
-                            <tr style="border-bottom: 1px solid rgba(0,0,0,0.1);">
-                                <td style="padding: 10px;">${row.date}</td>
-                                <td style="padding: 10px;">${row.bootTime ? row.bootTime.split(' ')[1] || row.bootTime : '-'}</td>
-                                <td style="padding: 10px;">${row.offTime ? row.offTime.split(' ')[1] || row.offTime : '-'}</td>
-                                <td style="padding: 10px;">${row.overtime === 'Yes' ? '<span style="color:var(--error-color);font-weight:bold;">O</span>' : '-'}</td>
-                            </tr>
-                        `;
-                    });
-                    if(!html) html = '<tr><td colspan="4" style="text-align:center; padding: 10px;">기록이 없습니다.</td></tr>';
-                    tbody.innerHTML = html;
-                } else {
-                    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding: 10px; color:red;">불러오기 실패</td></tr>';
-                }
-            } catch(e) {
-                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding: 10px; color:red;">통신 오류</td></tr>';
-            }
-        }
-        
-        // 페이지 로드 시 기록 가져오기
-        loadMyStats();
     }
 
 });
