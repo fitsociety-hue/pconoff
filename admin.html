@@ -34,7 +34,7 @@
     </style>
 </head>
 <body>
-    <div style="display: flex; flex-direction: column; gap: 20px; align-items: center; width: 100%; max-width: 960px; padding: 20px; box-sizing: border-box;">
+    <div class="main-wrapper" style="display: flex; flex-direction: column; gap: 20px; align-items: center; width: 100%; max-width: 960px; box-sizing: border-box;">
         <!-- 관리자 로그인 폼 -->
     <div class="glass-container" id="adminLoginForm">
         <h2>관리자 로그인</h2>
@@ -54,7 +54,7 @@
 
     <!-- 관리자 대시보드 -->
     <div class="glass-container wide hidden" id="adminDashboard">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div class="dashboard-header" style="display: flex; justify-content: space-between; align-items: center;">
             <h2 id="dashboardTitle">전체 PC 접속시간 현황 보고서</h2>
             <div>
                 <button id="changePwdBtn" class="secondary-button" style="width: auto; padding: 6px 12px; margin-top: 0;">비밀번호 변경</button>
@@ -62,7 +62,7 @@
             </div>
         </div>
         
-        <div class="filter-section no-print" style="flex-wrap: nowrap; align-items: center;">
+        <div class="filter-section no-print" style="align-items: center;">
             <input type="date" id="filterDate">
             <input type="text" list="employeeList" id="filterName" placeholder="전체 직원 (검색)" style="width: 150px; padding: 8px; border-radius: 8px; border: 1px solid var(--glass-border); background: rgba(255,255,255,0.7);">
             <datalist id="employeeList">
