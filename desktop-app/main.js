@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Tray, Menu, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, Tray, Menu, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { execSync } = require('child_process');
@@ -48,6 +48,7 @@ function createTray() {
     tray = new Tray(path.join(__dirname, 'icon.png'));
     const contextMenu = Menu.buildFromTemplate([
         { label: '설정 열기', click: () => mainWindow.show() },
+        { label: '근태 대시보드 열기(웹)', click: () => shell.openExternal('https://fitsociety-hue.github.io/pconoff/') },
         { type: 'separator' },
         { 
             label: '완전 종료', 
@@ -191,4 +192,8 @@ ipcMain.on('save-config', (event, newName) => {
     }
     
     mainWindow.hide();
+});
+
+ipcMain.on('open-dashboard', () => {
+    shell.openExternal('https://fitsociety-hue.github.io/pconoff/');
 });

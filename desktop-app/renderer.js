@@ -27,4 +27,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         // 메인 프로세스로 새 이름 전송 및 창 숨기기 요청
         ipcRenderer.send('save-config', newName);
     });
+
+    const dashBtn = document.getElementById('dashBtn');
+    if (dashBtn) {
+        dashBtn.addEventListener('click', () => {
+            ipcRenderer.send('open-dashboard');
+        });
+    }
 });
