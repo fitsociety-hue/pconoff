@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Tray, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, Tray, Menu, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { execSync } = require('child_process');
@@ -67,8 +67,8 @@ function createTray() {
 
 function createWindow() {
     mainWindow = new BrowserWindow({
-        width: 400,
-        height: 350,
+        width: 480,
+        height: 420,
         show: false,
         autoHideMenuBar: true,
         webPreferences: {
@@ -111,7 +111,51 @@ app.whenReady().then(() => {
         console.log("Sending boot record...");
         sendSyncRequest('recordBoot', config.name);
     }
+    
+    // 시간외근무 체크 타이머 시작
+    startOvertimeCheck();
 });
+
+// 하루에 한 번만 체크하기 위한 플래그
+let overtimeCheckedToday = false;
+
+function startOvertimeCheck() {
+    // 1분(60000ms)마다 현재 시간 확인
+    setInterval(() => {
+        const now = new Date();
+        const kstTime = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Seoul"}));
+        const hour = kstTime.getHours();
+        const minute = kstTime.getMinutes();
+
+        // 18시 09분에 팝업 표시
+        if (hour === 18 && minute === 9 && !overtimeCheckedToday) {
+            overtimeCheckedToday = true;
+            
+            dialog.showMessageBox({
+                type: 'question',
+                buttons: ['신청함', '미신청'],
+                title: '시간외근무 확인',
+                message: '시간외근무 신청 여부를 확인해주세요.',
+                detail: '현재 대한민국 시간 18:09 입니다.\n오늘 시간외근무를 신청하셨습니까?'
+            }).then(result => {
+                // '미신청' 버튼 (인덱스 1)
+                if (result.response === 1) {
+                    dialog.showMessageBox({
+                        type: 'warning',
+                        buttons: ['확인'],
+                        title: '퇴근 독려',
+                        message: '시간외근무 미신청자입니다.\n신속히 PC를 종료하고 퇴근해주시기 바랍니다.'
+                    });
+                }
+            });
+        }
+        
+        // 자정이 지나면 플래그 리셋
+        if (hour === 0 && minute === 0) {
+            overtimeCheckedToday = false;
+        }
+    }, 60000);
+}
 
 // Windows 시스템 종료 감지 로직
 let shutdownHandled = false;
