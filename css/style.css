@@ -174,19 +174,33 @@ button:hover {
 
 .filter-inputs {
     display: flex;
-    gap: 10px;
+    gap: 15px;
     flex: 1;
+}
+
+.input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex: 1;
+}
+
+.input-group label {
+    font-size: 13px;
+    color: var(--primary-dark);
+    margin-bottom: 0;
+    font-weight: 600;
 }
 
 .filter-actions {
     display: flex;
     gap: 10px;
+    align-self: flex-end;
 }
 
 .filter-input {
-    width: auto !important;
-    flex: 1;
-    max-width: 200px;
+    width: 100% !important;
+    max-width: none;
     height: 44px;
     padding: 0 15px !important;
 }
@@ -448,6 +462,7 @@ tr:last-child td {
         display: flex;
         gap: 10px;
         width: 100%;
+        margin-top: 5px;
     }
     
     .filter-btn {
@@ -455,14 +470,7 @@ tr:last-child td {
     }
 
     .seal-upload-section {
-        flex-direction: column;
-        align-items: stretch;
-        gap: 10px;
-        padding: 12px;
-    }
-    
-    .seal-upload-section label {
-        text-align: left;
+        display: none !important;
     }
 
     /* Table Adjustments */

@@ -53,9 +53,15 @@
         
         <div class="filter-section no-print">
             <div class="filter-inputs">
-                <input type="date" id="filterDate" class="filter-input">
-                <input type="text" list="employeeList" id="filterName" placeholder="전체 직원 (검색)" class="filter-input">
-                <datalist id="employeeList"></datalist>
+                <div class="input-group">
+                    <label for="filterDate">📅 날짜 선택</label>
+                    <input type="date" id="filterDate" class="filter-input">
+                </div>
+                <div class="input-group">
+                    <label for="filterName">👤 직원 검색</label>
+                    <input type="text" list="employeeList" id="filterName" placeholder="전체 직원" class="filter-input">
+                    <datalist id="employeeList"></datalist>
+                </div>
             </div>
             <div class="filter-actions">
                 <button id="refreshBtn" class="filter-btn">조회</button>
