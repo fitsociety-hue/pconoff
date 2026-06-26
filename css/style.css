@@ -400,10 +400,12 @@ tr:last-child td {
 @media (max-width: 768px) {
     .main-wrapper {
         padding: 0;
+        margin: auto; /* Ensure it stays centered if body is flex */
+        width: 100%;
     }
 
     body {
-        align-items: flex-start;
+        /* Remove align-items: flex-start so it stays centered vertically */
         padding: 20px 10px;
         box-sizing: border-box;
     }
@@ -450,12 +452,15 @@ tr:last-child td {
 
     .filter-inputs {
         flex-direction: column;
-        gap: 10px;
+        gap: 8px;
     }
 
     .filter-input {
         max-width: 100%;
         width: 100% !important;
+        height: 38px; /* Smaller height for mobile */
+        padding: 0 10px !important;
+        font-size: 14px;
     }
 
     .filter-actions {
@@ -467,6 +472,8 @@ tr:last-child td {
     
     .filter-btn {
         flex: 1;
+        height: 38px; /* Match input height */
+        font-size: 14px;
     }
 
     .seal-upload-section {
