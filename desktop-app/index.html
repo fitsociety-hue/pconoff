@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>PC 모니터링 앱 설정</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f4f7f6;
+            margin: 0;
+            padding: 30px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        h2 {
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+        p {
+            color: #7f8c8d;
+            font-size: 14px;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .form-group {
+            width: 100%;
+            max-width: 300px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        input[type="text"] {
+            padding: 12px;
+            border: 1px solid #bdc3c7;
+            border-radius: 6px;
+            font-size: 16px;
+        }
+        button {
+            padding: 12px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        .status {
+            margin-top: 15px;
+            font-size: 13px;
+            color: #27ae60;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <h2>직원 설정</h2>
+    <p>자신의 이름을 정확하게 입력해 주세요.<br>입력 후 창을 닫아도 백그라운드에서 자동 실행됩니다.</p>
+    
+    <div class="form-group">
+        <input type="text" id="employeeName" placeholder="예: 김용필">
+        <button id="saveBtn">저장하고 숨기기</button>
+    </div>
+    
+    <div class="status" id="statusMsg">설정이 저장되었습니다.</div>
+
+    <script src="renderer.js"></script>
+</body>
+</html>
