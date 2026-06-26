@@ -55,17 +55,20 @@
     <!-- 관리자 대시보드 -->
     <div class="glass-container wide hidden" id="adminDashboard">
         <div style="display: flex; justify-content: space-between; align-items: center;">
-            <h2>관리자 대시보드</h2>
+            <h2 id="dashboardTitle">전체 PC 접속시간 현황 보고서</h2>
             <div>
                 <button id="changePwdBtn" class="secondary-button" style="width: auto; padding: 6px 12px; margin-top: 0;">비밀번호 변경</button>
                 <button id="adminLogoutBtn" class="secondary-button" style="width: auto; padding: 6px 12px; margin-top: 0;">로그아웃</button>
             </div>
         </div>
         
-        <div class="filter-section no-print">
+        <div class="filter-section no-print" style="flex-wrap: nowrap; align-items: center;">
             <input type="date" id="filterDate">
-            <button id="refreshBtn" style="width: 100px;">조회</button>
-            <button id="printBtn" class="secondary-button" style="width: 100px;">보고서 인쇄</button>
+            <select id="filterName" style="width: 150px; padding: 8px; border-radius: 8px; border: 1px solid var(--glass-border); background: rgba(255,255,255,0.7);">
+                <option value="">전체 직원</option>
+            </select>
+            <button id="refreshBtn" style="width: 80px; flex-shrink: 0;">조회</button>
+            <button id="printBtn" class="secondary-button" style="width: auto; white-space: nowrap; flex-shrink: 0; padding: 8px 15px;">보고서 인쇄</button>
         </div>
 
         <div class="filter-section no-print" style="margin-top: 10px; border-top: 1px solid var(--glass-border); padding-top: 10px;">
@@ -173,6 +176,8 @@
             });
 
             // 통계 데이터 로드
+            let allStatsData = [];
+            
             async function loadStats() {
                 const tbody = document.getElementById('statsTableBody');
                 tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">데이터를 불러오는 중...</td></tr>';
@@ -183,7 +188,9 @@
                     const result = await response.json();
                     
                     if(result.status === 'success') {
-                        renderTable(result.data);
+                        allStatsData = result.data;
+                        updateNameFilterOptions(allStatsData);
+                        renderTable();
                     } else {
                         tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:red;">불러오기 실패</td></tr>';
                     }
@@ -192,9 +199,41 @@
                 }
             }
 
-            function renderTable(data) {
+            function updateNameFilterOptions(data) {
+                const nameFilter = document.getElementById('filterName');
+                if (!nameFilter) return;
+                
+                const names = [...new Set(data.map(row => row.name))].filter(n => n).sort();
+                const currentVal = nameFilter.value;
+                
+                let html = '<option value="">전체 직원</option>';
+                names.forEach(name => {
+                    html += `<option value="${name}">${name}</option>`;
+                });
+                nameFilter.innerHTML = html;
+                
+                if (names.includes(currentVal)) {
+                    nameFilter.value = currentVal;
+                }
+            }
+
+            function renderTable() {
                 const tbody = document.getElementById('statsTableBody');
                 const filterDate = document.getElementById('filterDate').value;
+                const filterName = document.getElementById('filterName') ? document.getElementById('filterName').value : '';
+                
+                // 타이틀 업데이트 로직
+                const dashboardTitleObj = document.getElementById('dashboardTitle');
+                const printTitleObj = document.getElementById('printTitle');
+                let titleStr = "전체 PC 접속시간 현황 보고서";
+                if (filterName) {
+                    titleStr = `${filterName} 직원 PC 접속시간 현황 보고서`;
+                }
+                if (filterDate) {
+                    titleStr = `[${filterDate}] ` + titleStr;
+                }
+                if (dashboardTitleObj) dashboardTitleObj.textContent = titleStr;
+                if (printTitleObj) printTitleObj.textContent = titleStr;
                 
                 const formatTime = (timeStr) => {
                     if (!timeStr || timeStr === '-') return '-';
@@ -226,7 +265,8 @@
                 let html = '';
                 
                 const groupedLogs = {};
-                data.forEach(row => {
+                allStatsData.forEach(row => {
+                    if (filterName && row.name !== filterName) return;
                     const dateKey = formatOnlyDate(row.date);
                     if (!dateKey || dateKey === '-') return;
                     
@@ -272,6 +312,12 @@
             }
 
             document.getElementById('refreshBtn').addEventListener('click', loadStats);
+            document.getElementById('filterDate').addEventListener('change', renderTable);
+            
+            const filterNameEl = document.getElementById('filterName');
+            if(filterNameEl) {
+                filterNameEl.addEventListener('change', renderTable);
+            }
 
             // 비밀번호 변경
             const pwdModal = document.getElementById('pwdModal');
@@ -388,14 +434,6 @@
 
             // 인쇄 기능
             document.getElementById('printBtn').addEventListener('click', () => {
-                const dateVal = document.getElementById('filterDate').value;
-                const titleObj = document.getElementById('printTitle');
-                if (dateVal) {
-                    titleObj.textContent = `[${dateVal}] PC 접속시간 현황 보고서`;
-                } else {
-                    titleObj.textContent = `전체 PC 접속시간 현황 보고서`;
-                }
-                
                 // 원본 테이블 복사
                 const tableHtml = document.getElementById('statsTable').outerHTML;
                 document.getElementById('printTableContainer').innerHTML = tableHtml;
