@@ -185,7 +185,7 @@
                     try {
                         const d = new Date(timeStr);
                         if (isNaN(d.getTime())) return timeStr;
-                        return d.toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', hour12: false });
+                        return d.toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul', hour12: false });
                     } catch(e) { return timeStr; }
                 };
                 
@@ -208,8 +208,34 @@
                 };
 
                 let html = '';
+                
+                const groupedLogs = {};
+                data.forEach(row => {
+                    const dateKey = formatOnlyDate(row.date);
+                    if (!dateKey || dateKey === '-') return;
+                    
+                    const groupKey = dateKey + '|' + row.name;
+                    if (!groupedLogs[groupKey]) {
+                        groupedLogs[groupKey] = { date: row.date, name: row.name, bootTime: row.bootTime, offTime: row.offTime };
+                    } else {
+                        const currentBoot = new Date(groupedLogs[groupKey].bootTime).getTime();
+                        const rowBoot = new Date(row.bootTime).getTime();
+                        if (!isNaN(rowBoot) && (isNaN(currentBoot) || rowBoot < currentBoot)) {
+                            groupedLogs[groupKey].bootTime = row.bootTime;
+                        }
+                        
+                        const currentOff = new Date(groupedLogs[groupKey].offTime).getTime();
+                        const rowOff = new Date(row.offTime).getTime();
+                        if (!isNaN(rowOff) && (isNaN(currentOff) || rowOff > currentOff)) {
+                            groupedLogs[groupKey].offTime = row.offTime;
+                        }
+                    }
+                });
+                
+                const processedLogs = Object.values(groupedLogs).sort((a,b) => new Date(a.date) - new Date(b.date));
+
                 // 최신순 정렬
-                data.reverse().forEach(row => {
+                processedLogs.slice().reverse().forEach(row => {
                     const rowFilterDate = getFilterFormat(row.date);
                     
                     // 날짜 필터 적용

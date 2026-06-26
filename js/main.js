@@ -265,7 +265,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 try {
                     const d = new Date(timeStr);
                     if (isNaN(d.getTime())) return timeStr;
-                    return d.toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', hour12: false });
+                    return d.toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul', hour12: false });
                 } catch(e) { return timeStr; }
             };
             const formatOnlyDate = (timeStr) => {
@@ -288,7 +288,30 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             let html = '';
             
-            allUserLogs.slice().reverse().forEach(row => {
+            const groupedLogs = {};
+            allUserLogs.forEach(row => {
+                const dateKey = formatOnlyDate(row.date);
+                if (!dateKey || dateKey === '-') return;
+                
+                if (!groupedLogs[dateKey]) {
+                    groupedLogs[dateKey] = { date: row.date, bootTime: row.bootTime, offTime: row.offTime };
+                } else {
+                    const currentBoot = new Date(groupedLogs[dateKey].bootTime).getTime();
+                    const rowBoot = new Date(row.bootTime).getTime();
+                    if (!isNaN(rowBoot) && (isNaN(currentBoot) || rowBoot < currentBoot)) {
+                        groupedLogs[dateKey].bootTime = row.bootTime;
+                    }
+                    
+                    const currentOff = new Date(groupedLogs[dateKey].offTime).getTime();
+                    const rowOff = new Date(row.offTime).getTime();
+                    if (!isNaN(rowOff) && (isNaN(currentOff) || rowOff > currentOff)) {
+                        groupedLogs[dateKey].offTime = row.offTime;
+                    }
+                }
+            });
+            const processedLogs = Object.values(groupedLogs).sort((a,b) => new Date(a.date) - new Date(b.date));
+            
+            processedLogs.slice().reverse().forEach(row => {
                 let rowDate;
                 try {
                     rowDate = new Date(row.date);
