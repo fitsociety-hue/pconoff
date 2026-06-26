@@ -5,6 +5,7 @@ Windows PC의 부팅 시간과 마지막 종료 시간을 관리하는 근태보
 ## 🚀 배포 방법
 
 ### 1. Google Apps Script (백엔드) 설정
+
 1. Google Drive에서 새로 만들기 > Google 스프레드시트 생성
 2. 상단 메뉴의 **확장 프로그램 > Apps Script** 클릭
 3. `backend/Code.gs`의 내용을 복사하여 붙여넣기
@@ -15,6 +16,7 @@ Windows PC의 부팅 시간과 마지막 종료 시간을 관리하는 근태보
 8. 복사한 URL을 `js/config.js` 파일 안의 `CONFIG.GAS_URL` 값으로 교체
 
 ### 2. GitHub Pages (프론트엔드) 설정
+
 1. 이 프로젝트를 자신의 GitHub 레포지토리에 푸시(Push)
 2. 레포지토리의 **Settings > Pages** 메뉴로 이동
 3. Source를 **Deploy from a branch**로 선택하고, Branch를 **main**, 폴더를 **/ (root)**로 지정 후 Save
@@ -22,6 +24,7 @@ Windows PC의 부팅 시간과 마지막 종료 시간을 관리하는 근태보
 5. 이 주소를 `startup_script.ps1`의 `$webAppUrl` 값으로 변경
 
 ### 3. PC 연동 (시작프로그램 등록)
+
 1. `startup_script.ps1` 파일을 다운로드 (내부의 `$webAppUrl`이 수정된 상태여야 함)
 2. `Win + R` 키를 누르고 `shell:startup` 입력 후 엔터
 3. 열린 시작프로그램 폴더에 위 스크립트를 배치 (또는 이 스크립트를 실행하는 `.bat` 바로가기 배치)
@@ -30,7 +33,8 @@ Windows PC의 부팅 시간과 마지막 종료 시간을 관리하는 근태보
 4. 이제 PC를 켜면 부팅 시간이 파라미터로 붙어서 웹앱이 자동으로 열립니다.
 
 ## 🔑 주요 계정 정보
+
 - **관리자 초기 접속**
   - 아이디: `admin`
-  - 비밀번호: `1107`
+  - 비밀번호: `2026`
   - (접속 후 반드시 관리자 대시보드에서 비밀번호를 변경하세요)
