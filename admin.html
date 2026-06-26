@@ -64,9 +64,9 @@
         
         <div class="filter-section no-print" style="flex-wrap: nowrap; align-items: center;">
             <input type="date" id="filterDate">
-            <select id="filterName" style="width: 150px; padding: 8px; border-radius: 8px; border: 1px solid var(--glass-border); background: rgba(255,255,255,0.7);">
-                <option value="">전체 직원</option>
-            </select>
+            <input type="text" list="employeeList" id="filterName" placeholder="전체 직원 (검색)" style="width: 150px; padding: 8px; border-radius: 8px; border: 1px solid var(--glass-border); background: rgba(255,255,255,0.7);">
+            <datalist id="employeeList">
+            </datalist>
             <button id="refreshBtn" style="width: 80px; flex-shrink: 0;">조회</button>
             <button id="printBtn" class="secondary-button" style="width: auto; white-space: nowrap; flex-shrink: 0; padding: 8px 15px;">보고서 인쇄</button>
         </div>
@@ -200,21 +200,16 @@
             }
 
             function updateNameFilterOptions(data) {
-                const nameFilter = document.getElementById('filterName');
-                if (!nameFilter) return;
+                const employeeList = document.getElementById('employeeList');
+                if (!employeeList) return;
                 
                 const names = [...new Set(data.map(row => row.name))].filter(n => n).sort();
-                const currentVal = nameFilter.value;
                 
-                let html = '<option value="">전체 직원</option>';
+                let html = '';
                 names.forEach(name => {
                     html += `<option value="${name}">${name}</option>`;
                 });
-                nameFilter.innerHTML = html;
-                
-                if (names.includes(currentVal)) {
-                    nameFilter.value = currentVal;
-                }
+                employeeList.innerHTML = html;
             }
 
             function renderTable() {

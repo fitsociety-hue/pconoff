@@ -234,7 +234,7 @@ tr:last-child td {
         display: block;
     }
     
-    .no-print, #adminLoginForm, .modal-overlay, button, .filter-section {
+    .no-print, #adminLoginForm, #adminDashboard, .modal-overlay, button, .filter-section {
         display: none !important;
     }
 
