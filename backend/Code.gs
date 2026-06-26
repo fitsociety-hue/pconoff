@@ -31,8 +31,6 @@ function doGet(e) {
     return recordBootTime(e);
   } else if (action == "recordOff") {
     return recordOffTime(e);
-  } else if (action == "applyOvertime") {
-    return applyOvertime(e);
   } else if (action == "getStats") {
     return getStats(e);
   } else if (action == "getSeal") {
@@ -188,24 +186,6 @@ function recordOffTime(e) {
   
   return ContentService.createTextOutput(JSON.stringify({"status": "error", "message": "오늘자 부팅 기록을 찾을 수 없습니다."})).setMimeType(ContentService.MimeType.JSON);
 }
-
-function applyOvertime(e) {
-  var name = e.parameter.name;
-  var dateStr = getTodayString();
-  
-  var sheet = getSheet("Logs");
-  var data = sheet.getDataRange().getValues();
-  
-  for (var i = data.length - 1; i >= 1; i--) {
-    var rowDateStr = data[i][0] instanceof Date ? Utilities.formatDate(data[i][0], Session.getScriptTimeZone(), "yyyy-MM-dd") : String(data[i][0]).substring(0, 10);
-    if (rowDateStr == dateStr && data[i][1] == name) {
-      sheet.getRange(i + 1, 5).setValue("Yes");
-      return ContentService.createTextOutput(JSON.stringify({"status": "success", "message": "시간외근무 신청 완료"})).setMimeType(ContentService.MimeType.JSON);
-    }
-  }
-  return ContentService.createTextOutput(JSON.stringify({"status": "error", "message": "기록을 찾을 수 없습니다."})).setMimeType(ContentService.MimeType.JSON);
-}
-
 function getStats(e) {
   var logSheet = getSheet("Logs");
   var logData = logSheet.getDataRange().getValues();

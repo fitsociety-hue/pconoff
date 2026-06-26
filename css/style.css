@@ -47,11 +47,11 @@ body {
     padding: 40px;
     box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
     width: 100%;
-    max-width: 400px;
+    max-width: 480px;
 }
 
 .glass-container.wide {
-    max-width: 800px;
+    max-width: 960px;
 }
 
 h2 {

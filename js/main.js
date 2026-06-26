@@ -167,7 +167,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         // 현재 시간 표시 로직
         setInterval(() => {
             document.getElementById('currentTime').textContent = formatDateTime(new Date());
-            checkOvertime();
         }, 1000);
 
         // 출근 기록 전송 로직 (최초 진입 시)
@@ -232,34 +231,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         }
 
-        // 시간외근무 모달 관련
-        const overtimeModal = document.getElementById('overtimeModal');
-        let overtimePrompted = false;
 
-        function checkOvertime() {
-            const now = new Date();
-            // 18시 10분 이후 && 아직 프롬프트 안 띄움
-            if (now.getHours() >= 18 && now.getMinutes() >= 10 && !overtimePrompted) {
-                overtimePrompted = true;
-                overtimeModal.classList.add('active');
-            }
-        }
-
-        document.getElementById('applyOvertimeBtn').addEventListener('click', async () => {
-            try {
-                const url = `${CONFIG.GAS_URL}?action=applyOvertime&name=${encodeURIComponent(currentUser.name)}&t=${Date.now()}`;
-                await fetch(url);
-                alert('시간외근무 신청이 완료되었습니다.');
-                overtimeModal.classList.remove('active');
-            } catch(e) {
-                alert('오류 발생');
-            }
-        });
-
-        document.getElementById('declineOvertimeBtn').addEventListener('click', () => {
-            alert('업무시간이 종료되었습니다. 신속한 퇴근을 독려합니다!');
-            overtimeModal.classList.remove('active');
-        });
 
         // 나의 근태 기록 로드
         let allUserLogs = [];
@@ -306,6 +278,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             };
 
             const now = new Date();
+            const startOfDay = new Date(now);
+            startOfDay.setHours(0,0,0,0);
             const startOfWeek = new Date(now);
             startOfWeek.setDate(now.getDate() - now.getDay()); // Sunday as start
             startOfWeek.setHours(0,0,0,0);
@@ -321,6 +295,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 } catch(e) {}
                 
                 if (rowDate && !isNaN(rowDate.getTime())) {
+                    if (filterType === 'daily' && rowDate < startOfDay) return;
                     if (filterType === 'weekly' && rowDate < startOfWeek) return;
                     if (filterType === 'monthly' && rowDate < startOfMonth) return;
                 }
@@ -330,12 +305,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                         <td style="white-space: nowrap;">${formatOnlyDate(row.date)}</td>
                         <td style="white-space: nowrap;">${formatTime(row.bootTime)}</td>
                         <td style="white-space: nowrap;">${formatTime(row.offTime)}</td>
-                        <td style="white-space: nowrap;">${row.overtime === 'Yes' ? '<span style="color:red;font-weight:bold;">신청</span>' : '미신청'}</td>
                     </tr>
                 `;
             });
 
-            if(!html) html = '<tr><td colspan="4" style="text-align:center;">기록이 없습니다.</td></tr>';
+            if(!html) html = '<tr><td colspan="3" style="text-align:center;">기록이 없습니다.</td></tr>';
             tbody.innerHTML = html;
         }
 

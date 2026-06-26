@@ -68,7 +68,6 @@
                     <th style="white-space: nowrap;">이름</th>
                     <th style="white-space: nowrap;">출근(PC 켠 시간)</th>
                     <th style="white-space: nowrap;">퇴근(PC 끈 시간)</th>
-                    <th style="white-space: nowrap;">시간외근무 신청</th>
                 </tr>
             </thead>
             <tbody id="statsTableBody">
@@ -79,7 +78,7 @@
 
     <!-- 인쇄용 레이아웃 -->
     <div id="printArea" class="print-only">
-        <h2 id="printTitle" style="text-align: center; margin-bottom: 30px;">PC 접속시간 및 시간외근무 현황 보고서</h2>
+        <h2 id="printTitle" style="text-align: center; margin-bottom: 30px;">PC 접속시간 현황 보고서</h2>
         <div id="printTableContainer"></div>
         
         <div class="seal-container">
@@ -222,12 +221,11 @@
                             <td style="white-space: nowrap; word-break: keep-all;">${row.name}</td>
                             <td style="white-space: nowrap;">${formatTime(row.bootTime)}</td>
                             <td style="white-space: nowrap;">${formatTime(row.offTime)}</td>
-                            <td style="white-space: nowrap;">${row.overtime === 'Yes' ? '<span style="color:red;font-weight:bold;">신청</span>' : '미신청'}</td>
                         </tr>
                     `;
                 });
 
-                if(!html) html = '<tr><td colspan="5" style="text-align:center;">데이터가 없습니다.</td></tr>';
+                if(!html) html = '<tr><td colspan="4" style="text-align:center;">데이터가 없습니다.</td></tr>';
                 tbody.innerHTML = html;
             }
 
@@ -351,9 +349,9 @@
                 const dateVal = document.getElementById('filterDate').value;
                 const titleObj = document.getElementById('printTitle');
                 if (dateVal) {
-                    titleObj.textContent = `[${dateVal}] PC 접속시간 및 시간외근무 현황 보고서`;
+                    titleObj.textContent = `[${dateVal}] PC 접속시간 현황 보고서`;
                 } else {
-                    titleObj.textContent = `전체 PC 접속시간 및 시간외근무 현황 보고서`;
+                    titleObj.textContent = `전체 PC 접속시간 현황 보고서`;
                 }
                 
                 // 원본 테이블 복사
