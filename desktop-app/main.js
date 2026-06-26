@@ -4,7 +4,7 @@ const fs = require('fs');
 const { execSync } = require('child_process');
 
 const CONFIG_PATH = path.join(app.getPath('userData'), 'user_config.json');
-const GAS_URL = "https://script.google.com/macros/s/AKfycbzItESACzlF68RuGIpY6dHhfskD7j1WXCcBD5XCtS1jtmF55qo25sCSOBlmcq94Z-ZN/exec";
+const GAS_URL = "https://script.google.com/macros/s/AKfycbxCRx5X2vQEoo-kL7XtirKSQoqmHfVOtKTlWE10fAuZQlGtq6eKcQEfFHbnXfcCKonu/exec";
 
 let tray = null;
 let mainWindow = null;
@@ -26,13 +26,47 @@ function saveUserConfig(config) {
     fs.writeFileSync(CONFIG_PATH, JSON.stringify(config));
 }
 
+// 윈도우 systeminfo에서 시스템 부팅 시간(System Boot Time) 추출
+function getSystemBootTime() {
+    try {
+        // systeminfo 명령어를 통해 부팅 시간 추출
+        const output = execSync('chcp 65001 && systeminfo /fo csv', { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'] });
+        const lines = output.trim().split('\n');
+        const headerLine = lines.find(l => l.includes('OS Name'));
+        const dataLine = lines[lines.indexOf(headerLine) + 1];
+        
+        if (headerLine && dataLine) {
+            const headers = headerLine.split('","').map(s => s.replace(/"/g, ''));
+            const data = dataLine.split('","').map(s => s.replace(/"/g, ''));
+            const bootTimeIndex = headers.findIndex(h => h.includes('System Boot Time') || h.includes('부팅 시간'));
+            
+            if (bootTimeIndex !== -1 && data[bootTimeIndex]) {
+                return data[bootTimeIndex].replace(/\r/g, '');
+            }
+        }
+    } catch (e) {
+        console.error("Failed to get boot time from systeminfo", e);
+    }
+    
+    // systeminfo 실패 시, os 모듈의 uptime을 이용하여 부팅 시간 계산 (대체재)
+    const os = require('os');
+    const bootTimeMs = Date.now() - os.uptime() * 1000;
+    return new Date(bootTimeMs).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', hour12: false });
+}
+
 // 동기 방식으로 GAS에 요청 전송 (종료 시 필요)
 function sendSyncRequest(action, name) {
     if (!name) return;
     try {
-        const timeStr = new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', hour12: false });
+        let timeStr;
+        if (action === 'recordBoot') {
+            timeStr = getSystemBootTime();
+        } else {
+            timeStr = new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', hour12: false });
+        }
+        
         const timeParam = action === 'recordBoot' ? `bootTime=${encodeURIComponent(timeStr)}` : `offTime=${encodeURIComponent(timeStr)}`;
-        const url = `${GAS_URL}?action=${action}&name=${encodeURIComponent(name)}&${timeParam}&t=${Date.now()}`;
+        const url = `${GAS_URL}?action=${action}&name=${encodeURIComponent(name)}&${timeParam}&isDesktop=true&t=${Date.now()}`;
         
         // Windows 환경에서 동기적으로 HTTP 요청 보내기 (최대 5초 대기)
         execSync(`powershell -Command "Invoke-RestMethod -Uri '${url}'"`, { timeout: 5000, stdio: 'ignore' });
@@ -161,7 +195,7 @@ function startOvertimeCheck() {
 // Windows 시스템 종료 감지 로직
 let shutdownHandled = false;
 
-// before-quit은 사용자가 앱을 명시적으로 종료하거나 OS가 종료될 때 호출됨
+// before-quit은 사용자가 앱을 명시적으로 종료할 때 호출됨
 app.on('before-quit', (e) => {
     if (shutdownHandled) return;
     
@@ -169,6 +203,18 @@ app.on('before-quit', (e) => {
     if (config.name) {
         console.log("System shutting down. Sending off record...");
         // 서버에 퇴근 시간 기록
+        sendSyncRequest('recordOff', config.name);
+        shutdownHandled = true;
+    }
+});
+
+// session-end는 Windows가 종료, 재시작, 로그오프 될 때 호출되어 더 확실하게 감지됨
+app.on('session-end', () => {
+    if (shutdownHandled) return;
+    
+    const config = getUserConfig();
+    if (config.name) {
+        console.log("System session ending. Sending off record...");
         sendSyncRequest('recordOff', config.name);
         shutdownHandled = true;
     }

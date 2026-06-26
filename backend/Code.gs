@@ -159,6 +159,11 @@ function recordBootTime(e) {
   for (var i = 1; i < data.length; i++) {
     var rowDateStr = data[i][0] instanceof Date ? Utilities.formatDate(data[i][0], Session.getScriptTimeZone(), "yyyy-MM-dd") : String(data[i][0]).substring(0, 10);
     if (rowDateStr == dateStr && data[i][1] == name) {
+      if (e.parameter.isDesktop === 'true') {
+        // 데스크탑 앱에서 전송된 시스템 부팅 시간인 경우 덮어씌움
+        sheet.getRange(i + 1, 3).setValue(bootTime);
+        return ContentService.createTextOutput(JSON.stringify({"status": "success", "message": "데스크탑 부팅 시간으로 업데이트 완료"})).setMimeType(ContentService.MimeType.JSON);
+      }
       // 이미 부팅 기록이 있다면 업데이트하지 않고 기존 유지
       return ContentService.createTextOutput(JSON.stringify({"status": "success", "message": "이미 오늘 부팅 기록이 존재합니다."})).setMimeType(ContentService.MimeType.JSON);
     }
