@@ -18,11 +18,24 @@
             border: 1px solid var(--glass-border);
             background: rgba(255,255,255,0.7);
         }
+        @media print {
+            table {
+                border: 1px solid black;
+                width: 100% !important;
+                border-collapse: collapse;
+            }
+            th, td {
+                border: 1px solid black;
+                color: black;
+                white-space: nowrap !important;
+                word-break: keep-all !important;
+            }
+        }
     </style>
 </head>
 <body>
-    
-    <!-- 관리자 로그인 폼 -->
+    <div style="display: flex; flex-direction: column; gap: 20px; align-items: center; width: 100%; max-width: 960px; padding: 20px; box-sizing: border-box;">
+        <!-- 관리자 로그인 폼 -->
     <div class="glass-container" id="adminLoginForm">
         <h2>관리자 로그인</h2>
         <div class="form-group">
@@ -61,8 +74,9 @@
             <img id="sealPreview" src="" alt="직인 미리보기" style="max-height: 40px; display: none;">
         </div>
 
-        <table id="statsTable">
-            <thead>
+        <div style="overflow-x: auto; width: 100%;">
+            <table id="statsTable" style="width: 100%; font-size: 0.9em;">
+                <thead>
                 <tr>
                     <th style="white-space: nowrap;">날짜</th>
                     <th style="white-space: nowrap;">이름</th>
@@ -74,6 +88,8 @@
                 <!-- 데이터가 여기에 렌더링 됩니다 -->
             </tbody>
         </table>
+    </div>
+    </div>
     </div>
 
     <!-- 인쇄용 레이아웃 -->
