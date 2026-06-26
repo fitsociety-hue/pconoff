@@ -7,17 +7,6 @@
     <link rel="stylesheet" href="css/style.css">
     <script src="js/config.js"></script>
     <style>
-        .filter-section {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
-        }
-        .filter-section input[type="date"] {
-            padding: 8px;
-            border-radius: 8px;
-            border: 1px solid var(--glass-border);
-            background: rgba(255,255,255,0.7);
-        }
         @media print {
             table {
                 border: 1px solid black;
@@ -54,27 +43,30 @@
 
     <!-- 관리자 대시보드 -->
     <div class="glass-container wide hidden" id="adminDashboard">
-        <div class="dashboard-header" style="display: flex; justify-content: space-between; align-items: center;">
+        <div class="dashboard-header">
             <h2 id="dashboardTitle">전체 PC 접속시간 현황 보고서</h2>
-            <div>
-                <button id="changePwdBtn" class="secondary-button" style="width: auto; padding: 6px 12px; margin-top: 0;">비밀번호 변경</button>
-                <button id="adminLogoutBtn" class="secondary-button" style="width: auto; padding: 6px 12px; margin-top: 0;">로그아웃</button>
+            <div class="header-actions">
+                <button id="changePwdBtn" class="secondary-button small-btn">비밀번호 변경</button>
+                <button id="adminLogoutBtn" class="secondary-button small-btn">로그아웃</button>
             </div>
         </div>
         
-        <div class="filter-section no-print" style="align-items: center;">
-            <input type="date" id="filterDate">
-            <input type="text" list="employeeList" id="filterName" placeholder="전체 직원 (검색)" style="width: 150px; padding: 8px; border-radius: 8px; border: 1px solid var(--glass-border); background: rgba(255,255,255,0.7);">
-            <datalist id="employeeList">
-            </datalist>
-            <button id="refreshBtn" style="width: 80px; flex-shrink: 0;">조회</button>
-            <button id="printBtn" class="secondary-button" style="width: auto; white-space: nowrap; flex-shrink: 0; padding: 8px 15px;">보고서 인쇄</button>
+        <div class="filter-section no-print">
+            <div class="filter-inputs">
+                <input type="date" id="filterDate" class="filter-input">
+                <input type="text" list="employeeList" id="filterName" placeholder="전체 직원 (검색)" class="filter-input">
+                <datalist id="employeeList"></datalist>
+            </div>
+            <div class="filter-actions">
+                <button id="refreshBtn" class="filter-btn">조회</button>
+                <button id="printBtn" class="secondary-button filter-btn">보고서 인쇄</button>
+            </div>
         </div>
 
-        <div class="filter-section no-print" style="margin-top: 10px; border-top: 1px solid var(--glass-border); padding-top: 10px;">
-            <label for="sealUpload" style="align-self: center; margin-bottom: 0;">직인 업로드:</label>
-            <input type="file" id="sealUpload" accept="image/*" style="align-self: center;">
-            <img id="sealPreview" src="" alt="직인 미리보기" style="max-height: 40px; display: none;">
+        <div class="seal-upload-section no-print">
+            <label for="sealUpload">직인 업로드:</label>
+            <input type="file" id="sealUpload" accept="image/*">
+            <img id="sealPreview" src="" alt="직인 미리보기">
         </div>
 
         <div style="overflow-x: auto; width: 100%;">

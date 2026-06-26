@@ -115,7 +115,6 @@ button:hover {
     background: transparent;
     color: var(--primary-color);
     border: 1px solid var(--primary-color);
-    margin-top: 10px;
 }
 
 .secondary-button:hover {
@@ -139,6 +138,94 @@ button:hover {
 }
 
 /* Dashboard specific */
+.dashboard-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.dashboard-header h2 {
+    margin-bottom: 0;
+}
+
+.header-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.small-btn {
+    width: auto;
+    padding: 8px 16px;
+    font-size: 14px;
+}
+
+.filter-section {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 15px;
+    background: rgba(255,255,255,0.4);
+    padding: 15px;
+    border-radius: 12px;
+    border: 1px solid var(--glass-border);
+}
+
+.filter-inputs {
+    display: flex;
+    gap: 10px;
+    flex: 1;
+}
+
+.filter-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.filter-input {
+    width: auto !important;
+    flex: 1;
+    max-width: 200px;
+    height: 44px;
+    padding: 0 15px !important;
+}
+
+.filter-btn {
+    width: auto;
+    height: 44px;
+    padding: 0 20px;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.seal-upload-section {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 20px;
+    padding: 15px;
+    background: rgba(255,255,255,0.4);
+    border-radius: 12px;
+    border: 1px solid var(--glass-border);
+}
+
+.seal-upload-section label {
+    margin-bottom: 0;
+    white-space: nowrap;
+}
+
+.seal-upload-section input[type="file"] {
+    flex: 1;
+}
+
+.seal-upload-section img {
+    max-height: 40px;
+    border-radius: 4px;
+}
+
 .time-display {
     text-align: center;
     font-size: 24px;
@@ -234,7 +321,7 @@ tr:last-child td {
         display: block;
     }
     
-    .no-print, #adminLoginForm, #adminDashboard, .modal-overlay, button, .filter-section {
+    .no-print, #adminLoginForm, #adminDashboard, .modal-overlay, button, .filter-section, .seal-upload-section {
         display: none !important;
     }
 
@@ -308,50 +395,74 @@ tr:last-child td {
     }
 
     .glass-container {
-        padding: 24px 20px;
+        padding: 20px 15px;
         border-radius: 12px;
         width: 100%;
         box-sizing: border-box;
     }
 
     h2 {
-        font-size: 1.5em;
-        margin-bottom: 20px;
+        font-size: 1.3em;
+        margin-bottom: 15px;
     }
 
-    /* Admin dashboard top header */
     .dashboard-header {
-        flex-direction: column !important;
-        align-items: flex-start !important;
+        flex-direction: column;
+        align-items: stretch;
         gap: 15px;
     }
     
-    .dashboard-header > div {
+    .dashboard-header h2 {
+        text-align: left;
+    }
+
+    .header-actions {
         display: flex;
-        flex-direction: column;
         width: 100%;
         gap: 10px;
     }
 
-    .dashboard-header button {
-        width: 100% !important;
-        margin-top: 0 !important;
+    .small-btn {
+        flex: 1;
+        padding: 10px;
     }
 
     .filter-section {
         flex-direction: column;
-        align-items: stretch !important;
-        gap: 10px !important;
+        align-items: stretch;
+        gap: 10px;
+        padding: 12px;
     }
 
-    .filter-section > * {
+    .filter-inputs {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .filter-input {
+        max-width: 100%;
         width: 100% !important;
-        margin: 0 !important;
+    }
+
+    .filter-actions {
+        display: flex;
+        gap: 10px;
+        width: 100%;
     }
     
-    .filter-section > input, 
-    .filter-section > button {
-        box-sizing: border-box;
+    .filter-btn {
+        flex: 1;
+    }
+
+    .seal-upload-section {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+        padding: 12px;
+    }
+    
+    .seal-upload-section label {
+        text-align: left;
     }
 
     /* Table Adjustments */
