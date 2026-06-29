@@ -380,16 +380,16 @@ tr:last-child td {
     display: inline-block;
     text-align: center;
     margin-top: 50px;
-    font-size: 53px;
+    font-size: 37px;
     font-weight: bold;
 }
 
 .seal-img {
     position: absolute;
-    right: -60px;
-    top: -20px;
-    width: 120px;
-    height: 120px;
+    right: -51px;
+    top: -17px;
+    width: 102px;
+    height: 102px;
     mix-blend-mode: multiply;
     opacity: 0.9;
 }
