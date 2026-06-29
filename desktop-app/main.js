@@ -26,32 +26,28 @@ function saveUserConfig(config) {
     fs.writeFileSync(CONFIG_PATH, JSON.stringify(config));
 }
 
-// 윈도우 systeminfo에서 시스템 부팅 시간(System Boot Time) 추출
-function getSystemBootTime() {
+// Windows 이벤트 로그(6005, 6009, 1074, 6006, 6008)를 통해 부팅/종료 시간 추출
+function getEventLogTime(type) {
     try {
-        // systeminfo 명령어를 통해 부팅 시간 추출
-        const output = execSync('chcp 65001 && systeminfo /fo csv', { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'] });
-        const lines = output.trim().split('\n');
-        const headerLine = lines.find(l => l.includes('OS Name'));
-        const dataLine = lines[lines.indexOf(headerLine) + 1];
+        let psCommand = '';
+        if (type === 'boot') {
+            psCommand = `$today = (Get-Date).Date; $events = Get-WinEvent -FilterHashtable @{LogName='System'; Id=1,12,6005,6009,7001; StartTime=$today} -ErrorAction SilentlyContinue; if ($events) { $events | Sort-Object TimeCreated | Select-Object -First 1 -ExpandProperty TimeCreated | Get-Date -Format 'yyyy-MM-dd HH:mm:ss' } else { Get-Date -Format 'yyyy-MM-dd HH:mm:ss' }`;
+        } else if (type === 'off') {
+            psCommand = `$events = Get-WinEvent -FilterHashtable @{LogName='System'; Id=1074,6006,6008} -MaxEvents 1 -ErrorAction SilentlyContinue; if ($events) { $events | Select-Object -ExpandProperty TimeCreated | Get-Date -Format 'yyyy-MM-dd HH:mm:ss' }`;
+        }
         
-        if (headerLine && dataLine) {
-            const headers = headerLine.split('","').map(s => s.replace(/"/g, ''));
-            const data = dataLine.split('","').map(s => s.replace(/"/g, ''));
-            const bootTimeIndex = headers.findIndex(h => h.includes('System Boot Time') || h.includes('부팅 시간'));
-            
-            if (bootTimeIndex !== -1 && data[bootTimeIndex]) {
-                return data[bootTimeIndex].replace(/\r/g, '');
-            }
+        if (psCommand) {
+            const output = execSync(`powershell -Command "${psCommand}"`, { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+            if (output) return output;
         }
     } catch (e) {
-        console.error("Failed to get boot time from systeminfo", e);
+        console.error(`Failed to get ${type} event log time`, e);
     }
     
-    // systeminfo 실패 시, os 모듈의 uptime을 이용하여 부팅 시간 계산 (대체재)
-    const os = require('os');
-    const bootTimeMs = Date.now() - os.uptime() * 1000;
-    return new Date(bootTimeMs).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', hour12: false });
+    // Fallback: 현재 시간
+    const now = new Date();
+    const pad = (n) => n.toString().padStart(2, '0');
+    return `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
 }
 
 // 동기 방식으로 GAS에 요청 전송 (종료 시 필요)
@@ -60,9 +56,9 @@ function sendSyncRequest(action, name) {
     try {
         let timeStr;
         if (action === 'recordBoot') {
-            timeStr = getSystemBootTime();
+            timeStr = getEventLogTime('boot');
         } else {
-            timeStr = new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', hour12: false });
+            timeStr = getEventLogTime('off');
         }
         
         const timeParam = action === 'recordBoot' ? `bootTime=${encodeURIComponent(timeStr)}` : `offTime=${encodeURIComponent(timeStr)}`;

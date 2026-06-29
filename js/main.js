@@ -164,16 +164,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         document.getElementById('userNameDisplay').textContent = `${currentUser.team} ${currentUser.name} ${currentUser.role}`;
 
-        // 현재 시간 표시 로직
-        setInterval(() => {
-            document.getElementById('currentTime').textContent = formatDateTime(new Date());
-        }, 1000);
-
         // 출근 기록 전송 로직 (최초 진입 시)
         let actualBootTime = bootTimeParam;
         if (!actualBootTime) {
             actualBootTime = formatDateTime(new Date()); // 파라미터가 없으면 현재 시간을 출근 시간으로 간주
         }
+
+        // 출근 시간 표시 로직 (현재 시간 대신 출근 시간 고정)
+        document.getElementById('currentTime').textContent = `출근(PC 켠 시간): ${actualBootTime}`;
         
         try {
             const url = `${CONFIG.GAS_URL}?action=recordBoot&name=${encodeURIComponent(currentUser.name)}&bootTime=${encodeURIComponent(actualBootTime)}&t=${Date.now()}`;
@@ -310,6 +308,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
             });
             const processedLogs = Object.values(groupedLogs).sort((a,b) => new Date(a.date) - new Date(b.date));
+            
+            // 대시보드 메인 화면의 출근 시간을 서버에서 불러온 진짜 출근 시간으로 갱신
+            const todayStr = formatOnlyDate(formatDateTime(new Date()));
+            if (groupedLogs[todayStr] && groupedLogs[todayStr].bootTime !== '-') {
+                const mainTimeDisplay = document.getElementById('currentTime');
+                if (mainTimeDisplay) {
+                    mainTimeDisplay.textContent = `출근(PC 켠 시간): ${groupedLogs[todayStr].bootTime}`;
+                }
+            }
             
             processedLogs.slice().reverse().forEach(row => {
                 let rowDate;
