@@ -76,6 +76,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                     
                     if (result.status === 'success') {
                         localStorage.setItem('user', JSON.stringify(result.user));
+                        try {
+                            const { ipcRenderer } = require('electron');
+                            ipcRenderer.send('save-config', result.user.name);
+                        } catch(err) {}
+
                         if (bootTimeParam) {
                             window.location.href = `dashboard.html?boot_time=${bootTimeParam}`;
                         } else {
@@ -206,6 +211,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                     if(result.status === 'success') {
                         alert('퇴근이 기록되었습니다. 수고하셨습니다!');
                         localStorage.removeItem('user'); // 로그아웃 처리
+                        try {
+                            const { ipcRenderer } = require('electron');
+                            ipcRenderer.send('save-config', '');
+                        } catch(err) {}
                         window.location.href = 'index.html';
                     } else {
                         alert(result.message);
@@ -220,11 +229,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
         }
 
-        // 로그아웃 버튼
         const logoutBtn = document.getElementById('logoutBtn');
         if(logoutBtn) {
             logoutBtn.addEventListener('click', () => {
                 localStorage.removeItem('user');
+                try {
+                    const { ipcRenderer } = require('electron');
+                    ipcRenderer.send('save-config', '');
+                } catch(err) {}
                 window.location.href = 'index.html';
             });
         }

@@ -189,7 +189,9 @@ function recordOffTime(e) {
     }
   }
   
-  return ContentService.createTextOutput(JSON.stringify({"status": "error", "message": "오늘자 부팅 기록을 찾을 수 없습니다."})).setMimeType(ContentService.MimeType.JSON);
+  // 오늘자 부팅 기록이 없을 경우, 퇴근 기록이라도 남기기 위해 새 행 추가
+  sheet.appendRow([dateStr, name, "-", offTime, "No"]);
+  return ContentService.createTextOutput(JSON.stringify({"status": "success", "message": "부팅 기록 없이 종료 시간 기록 완료"})).setMimeType(ContentService.MimeType.JSON);
 }
 function getStats(e) {
   var logSheet = getSheet("Logs");

@@ -33,7 +33,7 @@ function getEventLogTime(type) {
         if (type === 'boot') {
             psCommand = `$today = (Get-Date).Date; $events = Get-WinEvent -FilterHashtable @{LogName='System'; Id=1,12,6005,6009,7001; StartTime=$today} -ErrorAction SilentlyContinue; if ($events) { $events | Sort-Object TimeCreated | Select-Object -First 1 -ExpandProperty TimeCreated | Get-Date -Format 'yyyy-MM-dd HH:mm:ss' } else { Get-Date -Format 'yyyy-MM-dd HH:mm:ss' }`;
         } else if (type === 'off') {
-            psCommand = `$events = Get-WinEvent -FilterHashtable @{LogName='System'; Id=1074,6006,6008} -MaxEvents 1 -ErrorAction SilentlyContinue; if ($events) { $events | Select-Object -ExpandProperty TimeCreated | Get-Date -Format 'yyyy-MM-dd HH:mm:ss' }`;
+            psCommand = `$events = Get-WinEvent -FilterHashtable @{LogName='System'; Id=1074,6006,6008} -MaxEvents 1 -ErrorAction SilentlyContinue; if ($events -and ((Get-Date) - $events[0].TimeCreated).TotalMinutes -lt 10) { $events[0].TimeCreated | Get-Date -Format 'yyyy-MM-dd HH:mm:ss' } else { Get-Date -Format 'yyyy-MM-dd HH:mm:ss' }`;
         }
         
         if (psCommand) {
