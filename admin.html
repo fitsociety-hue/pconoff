@@ -98,9 +98,19 @@
         <h2 id="printTitle" style="text-align: center; margin-bottom: 30px;">PC 접속시간 현황 보고서</h2>
         <div id="printTableContainer"></div>
         
-        <div class="seal-container">
-            강동어울림복지관장
-            <img id="printSealImg" class="seal-img" src="" alt="" style="display: none;">
+        <div id="printCertifyText" style="text-align: center; margin-top: 60px; font-size: 20px; font-weight: bold; letter-spacing: 1px;">
+            위와 같이 직원의 근무 사실을 증명합니다.
+        </div>
+        
+        <div id="printDateText" style="text-align: center; margin-top: 40px; font-size: 18px; letter-spacing: 1px;">
+            출력 날짜 : 
+        </div>
+
+        <div style="text-align: center; margin-top: 100px;">
+            <div class="seal-container">
+                강동어울림복지관장
+                <img id="printSealImg" class="seal-img" src="" alt="" style="display: none;">
+            </div>
         </div>
     </div>
 
@@ -442,6 +452,17 @@
                 // 원본 테이블 복사
                 const tableHtml = document.getElementById('statsTable').outerHTML;
                 document.getElementById('printTableContainer').innerHTML = tableHtml;
+
+                // 출력 문구 업데이트
+                const filterName = document.getElementById('filterName') ? document.getElementById('filterName').value : '';
+                const certifyText = filterName ? `위와 같이 ${filterName} 직원의 근무 사실을 증명합니다.` : '위와 같이 직원의 근무 사실을 증명합니다.';
+                const certTextEl = document.getElementById('printCertifyText');
+                if (certTextEl) certTextEl.textContent = certifyText;
+
+                const today = new Date();
+                const dateText = `출력 날짜 : ${today.getFullYear()}년 ${today.getMonth() + 1}월 ${today.getDate()}일`;
+                const dateTextEl = document.getElementById('printDateText');
+                if (dateTextEl) dateTextEl.textContent = dateText;
 
                 window.print();
             });
