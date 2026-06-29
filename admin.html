@@ -263,14 +263,26 @@
                     const dateKey = formatOnlyDate(row.date);
                     if (!dateKey || dateKey === '-') return;
                     
+                    let isBootValid = true;
+                    if (row.bootTime && row.bootTime !== '-') {
+                        const rowDateMs = new Date(row.date).setHours(0,0,0,0);
+                        const bootMs = new Date(row.bootTime).getTime();
+                        if (!isNaN(rowDateMs) && !isNaN(bootMs)) {
+                            if (bootMs < rowDateMs - (24 * 60 * 60 * 1000)) {
+                                isBootValid = false;
+                            }
+                        }
+                    }
+                    const safeBootTime = isBootValid ? row.bootTime : '-';
+                    
                     const groupKey = dateKey + '|' + row.name;
                     if (!groupedLogs[groupKey]) {
-                        groupedLogs[groupKey] = { date: row.date, name: row.name, bootTime: row.bootTime, offTime: row.offTime };
+                        groupedLogs[groupKey] = { date: row.date, name: row.name, bootTime: safeBootTime, offTime: row.offTime };
                     } else {
                         const currentBoot = new Date(groupedLogs[groupKey].bootTime).getTime();
-                        const rowBoot = new Date(row.bootTime).getTime();
+                        const rowBoot = new Date(safeBootTime).getTime();
                         if (!isNaN(rowBoot) && (isNaN(currentBoot) || rowBoot < currentBoot)) {
-                            groupedLogs[groupKey].bootTime = row.bootTime;
+                            groupedLogs[groupKey].bootTime = safeBootTime;
                         }
                         
                         const currentOff = new Date(groupedLogs[groupKey].offTime).getTime();

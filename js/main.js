@@ -291,13 +291,25 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const dateKey = formatOnlyDate(row.date);
                 if (!dateKey || dateKey === '-') return;
                 
+                let isBootValid = true;
+                if (row.bootTime && row.bootTime !== '-') {
+                    const rowDateMs = new Date(row.date).setHours(0,0,0,0);
+                    const bootMs = new Date(row.bootTime).getTime();
+                    if (!isNaN(rowDateMs) && !isNaN(bootMs)) {
+                        if (bootMs < rowDateMs - (24 * 60 * 60 * 1000)) {
+                            isBootValid = false;
+                        }
+                    }
+                }
+                const safeBootTime = isBootValid ? row.bootTime : '-';
+                
                 if (!groupedLogs[dateKey]) {
-                    groupedLogs[dateKey] = { date: row.date, bootTime: row.bootTime, offTime: row.offTime };
+                    groupedLogs[dateKey] = { date: row.date, bootTime: safeBootTime, offTime: row.offTime };
                 } else {
                     const currentBoot = new Date(groupedLogs[dateKey].bootTime).getTime();
-                    const rowBoot = new Date(row.bootTime).getTime();
+                    const rowBoot = new Date(safeBootTime).getTime();
                     if (!isNaN(rowBoot) && (isNaN(currentBoot) || rowBoot < currentBoot)) {
-                        groupedLogs[dateKey].bootTime = row.bootTime;
+                        groupedLogs[dateKey].bootTime = safeBootTime;
                     }
                     
                     const currentOff = new Date(groupedLogs[dateKey].offTime).getTime();
@@ -314,7 +326,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (groupedLogs[todayStr] && groupedLogs[todayStr].bootTime !== '-') {
                 const mainTimeDisplay = document.getElementById('currentTime');
                 if (mainTimeDisplay) {
-                    mainTimeDisplay.textContent = `출근(PC 켠 시간): ${groupedLogs[todayStr].bootTime}`;
+                    mainTimeDisplay.textContent = `출근(PC 켠 시간): ${formatTime(groupedLogs[todayStr].bootTime)}`;
                 }
             }
             
