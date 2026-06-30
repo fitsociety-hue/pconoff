@@ -186,48 +186,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             console.error(e);
         }
 
-        // 브라우저/탭 종료 시 자동 퇴근 기록 (sendBeacon 사용)
-        window.addEventListener('beforeunload', () => {
-            const offTime = formatDateTime(new Date());
-            // navigator.sendBeacon은 POST 요청을 보내므로 Code.gs의 doPost에 recordOff를 추가해 두었음
-            const url = `${CONFIG.GAS_URL}?action=recordOff&name=${encodeURIComponent(currentUser.name)}&offTime=${encodeURIComponent(offTime)}&t=${Date.now()}`;
-            navigator.sendBeacon(url);
-        });
 
-        // 퇴근 버튼 로직
-        const offBtn = document.getElementById('offBtn');
-        if (offBtn) {
-            offBtn.addEventListener('click', async () => {
-                if(!confirm('퇴근을 기록하시겠습니까? 기록 후 창을 닫아주세요.')) return;
-                
-                const offTime = formatDateTime(new Date());
-                offBtn.disabled = true;
-                offBtn.textContent = '기록 중...';
 
-                try {
-                    const url = `${CONFIG.GAS_URL}?action=recordOff&name=${encodeURIComponent(currentUser.name)}&offTime=${encodeURIComponent(offTime)}&t=${Date.now()}`;
-                    const response = await fetch(url);
-                    const result = await response.json();
-                    if(result.status === 'success') {
-                        alert('퇴근이 기록되었습니다. 수고하셨습니다!');
-                        localStorage.removeItem('user'); // 로그아웃 처리
-                        try {
-                            const { ipcRenderer } = require('electron');
-                            ipcRenderer.send('save-config', '');
-                        } catch(err) {}
-                        window.location.href = 'index.html';
-                    } else {
-                        alert(result.message);
-                        offBtn.disabled = false;
-                        offBtn.textContent = '퇴근하기 (종료)';
-                    }
-                } catch (e) {
-                    alert('오류가 발생했습니다.');
-                    offBtn.disabled = false;
-                    offBtn.textContent = '퇴근하기 (종료)';
-                }
-            });
-        }
+
 
         const logoutBtn = document.getElementById('logoutBtn');
         if(logoutBtn) {
