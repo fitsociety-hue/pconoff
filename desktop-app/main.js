@@ -1,7 +1,7 @@
 const { app, BrowserWindow, ipcMain, Tray, Menu, dialog, shell, powerMonitor } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const { execSync } = require('child_process');
+const { exec, spawn } = require('child_process');
 
 const CONFIG_PATH = path.join(app.getPath('userData'), 'user_config.json');
 const GAS_URL = "https://script.google.com/macros/s/AKfycbxOHHpWE5IX1pikWQHni8VVW6D3NZdgHZDg7Z2sW9zRRlHV3pJUjvmPuLh_5Alq7mpx/exec";
@@ -31,9 +31,9 @@ function syncEventLogs(name) {
     if (!name) return;
     try {
         console.log("Starting event log sync...");
-        // 3일 전 자정 기준
-        const psCommand = "$days = (Get-Date).AddDays(-3).Date; $events = Get-WinEvent -FilterHashtable @{LogName='System'; Id=1,12,6005,6009,7001,7002,1074,6006,6008,42; StartTime=$days} -ErrorAction SilentlyContinue | Select-Object TimeCreated, Id; if ($events) { $events | ConvertTo-Json -Compress } else { '[]' }";
-        exec(`powershell -Command "${psCommand}"`, { encoding: 'utf-8', maxBuffer: 1024 * 1024 }, (error, stdout, stderr) => {
+        // 3일 전 자정 기준, -ErrorAction SilentlyContinue 필요. 출력은 'Id,ProviderName,TimeStr' 형식
+        const psCommand = "$days = (Get-Date).AddDays(-3).Date; $events = Get-WinEvent -FilterHashtable @{LogName='System'; Id=1,12,6005,6009,7001,7002,1074,6006,6008,42; StartTime=$days} -ErrorAction SilentlyContinue; if ($events) { $events | ForEach-Object { '{0},{1},{2}' -f $_.Id, $_.ProviderName, $_.TimeCreated.ToString('yyyy-MM-dd HH:mm:ss') } }";
+        exec(`powershell -Command "${psCommand}"`, { encoding: 'utf-8', maxBuffer: 1024 * 1024 * 5 }, (error, stdout, stderr) => {
             if (error) {
                 console.error("Failed to execute PowerShell command", error);
                 return;
@@ -43,54 +43,45 @@ function syncEventLogs(name) {
             if (!output || output === '') return;
             
             try {
-                const rawEvents = JSON.parse(output);
-                const events = (Array.isArray(rawEvents) ? rawEvents : [rawEvents]).map(e => {
-                    let ts = 0;
-                    if (e.TimeCreated) {
-                        const match = e.TimeCreated.match(/\/Date\((\d+)\)\//);
-                        if (match) {
-                            ts = parseInt(match[1], 10);
-                        } else {
-                            ts = new Date(e.TimeCreated).getTime();
-                        }
+                const lines = output.split('\n').map(l => l.trim()).filter(l => l);
+                const events = lines.map(l => {
+                    const parts = l.split(',');
+                    if (parts.length >= 3) {
+                        return {
+                            id: parseInt(parts[0], 10),
+                            provider: parts[1],
+                            timeStr: parts.slice(2).join(',').trim()
+                        };
                     }
-                    if (isNaN(ts)) ts = 0;
-                    return { time: ts, id: e.Id };
-                }).filter(e => e.time > 0);
+                    return null;
+                }).filter(e => e !== null);
                 
-                // 시간순 정렬 (오름차순)
-                events.sort((a, b) => a.time - b.time);
+                // 시간순 정렬 (오름차순) - 문자열 기반이지만 yyyy-MM-dd HH:mm:ss 형식이므로 올바르게 정렬됨
+                events.sort((a, b) => a.timeStr.localeCompare(b.timeStr));
                 
-                const bootIds = [1, 12, 6005, 6009, 7001];
+                const bootIds = [12, 6005, 6009, 7001];
                 const offIds = [1074, 6006, 6008, 42, 7002];
                 
                 const dailyLogs = {};
                 
-                const pad = (n) => n.toString().padStart(2, '0');
-                const getKSTDateString = (dateObj) => {
-                    const kst = new Date(dateObj.toLocaleString("en-US", {timeZone: "Asia/Seoul"}));
-                    return `${kst.getFullYear()}-${pad(kst.getMonth()+1)}-${pad(kst.getDate())}`;
-                };
-                const getKSTTimeString = (dateObj) => {
-                    const kst = new Date(dateObj.toLocaleString("en-US", {timeZone: "Asia/Seoul"}));
-                    return `${kst.getFullYear()}-${pad(kst.getMonth()+1)}-${pad(kst.getDate())} ${pad(kst.getHours())}:${pad(kst.getMinutes())}:${pad(kst.getSeconds())}`;
-                };
-
                 events.forEach(e => {
-                    const d = new Date(e.time);
-                    const dateStr = getKSTDateString(d);
-                    const timeStr = getKSTTimeString(d);
+                    // ID 1은 Power-Troubleshooter(절전 모드 해제)인 경우만 부팅(출근)으로 간주
+                    if (e.id === 1 && e.provider !== 'Microsoft-Windows-Power-Troubleshooter') {
+                        return;
+                    }
+                    
+                    const dateStr = e.timeStr.substring(0, 10);
                     
                     if (!dailyLogs[dateStr]) {
                         dailyLogs[dateStr] = { bootTime: null, offTime: null };
                     }
                     
-                    if (bootIds.includes(e.id)) {
+                    if (bootIds.includes(e.id) || e.id === 1) {
                         if (!dailyLogs[dateStr].bootTime) {
-                            dailyLogs[dateStr].bootTime = timeStr;
+                            dailyLogs[dateStr].bootTime = e.timeStr;
                         }
                     } else if (offIds.includes(e.id)) {
-                        dailyLogs[dateStr].offTime = timeStr;
+                        dailyLogs[dateStr].offTime = e.timeStr;
                     }
                 });
                 
@@ -107,7 +98,7 @@ function syncEventLogs(name) {
                     }
                 }
             } catch (e) {
-                console.error("JSON parse error for event logs", e);
+                console.error("Parse error for event logs", e);
             }
         });
     } catch (e) {
