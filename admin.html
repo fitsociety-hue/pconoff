@@ -43,8 +43,17 @@
 
     <!-- 관리자 대시보드 -->
     <div class="glass-container wide hidden" id="adminDashboard">
-        <div class="dashboard-header">
-            <h2 id="dashboardTitle">전체 PC 접속시간 현황 보고서</h2>
+        
+        <!-- 탭 메뉴 -->
+        <div class="tab-header no-print" style="display: flex; gap: 10px; margin-bottom: 20px;">
+            <button class="tab-btn active" data-tab="attendanceTab" style="flex: 1;">근태 현황</button>
+            <button class="tab-btn secondary-button" data-tab="memberTab" style="flex: 1;">회원 관리</button>
+        </div>
+
+        <!-- 근태 현황 탭 -->
+        <div id="attendanceTab" class="tab-content active">
+            <div class="dashboard-header">
+                <h2 id="dashboardTitle">전체 PC 접속시간 현황 보고서</h2>
             <div class="header-actions">
                 <button id="changePwdBtn" class="secondary-button small-btn">비밀번호 변경</button>
                 <button id="adminLogoutBtn" class="secondary-button small-btn">로그아웃</button>
@@ -89,9 +98,38 @@
                 <!-- 데이터가 여기에 렌더링 됩니다 -->
             </tbody>
         </table>
-    </div>
-    </div>
-    </div>
+        </div>
+        </div> <!-- // 근태 현황 탭 끝 -->
+
+        <!-- 회원 관리 탭 -->
+        <div id="memberTab" class="tab-content" style="display: none;">
+            <div class="dashboard-header">
+                <h2>회원 관리</h2>
+                <div class="header-actions">
+                    <button class="secondary-button small-btn" onclick="document.getElementById('changePwdBtn').click()">비밀번호 변경</button>
+                    <button class="secondary-button small-btn" onclick="document.getElementById('adminLogoutBtn').click()">로그아웃</button>
+                </div>
+            </div>
+            
+            <div style="overflow-x: auto; width: 100%;">
+                <table id="usersTable" style="width: 100%; font-size: 0.9em;" class="card-table">
+                    <thead>
+                        <tr>
+                            <th style="white-space: nowrap;">부서</th>
+                            <th style="white-space: nowrap;">이름</th>
+                            <th style="white-space: nowrap;">직급</th>
+                            <th style="white-space: nowrap;">상태</th>
+                            <th style="white-space: nowrap;">비밀번호 재설정</th>
+                        </tr>
+                    </thead>
+                    <tbody id="usersTableBody">
+                        <!-- 회원 데이터가 여기에 렌더링 됩니다 -->
+                    </tbody>
+                </table>
+            </div>
+        </div> <!-- // 회원 관리 탭 끝 -->
+
+    </div> <!-- // 관리자 대시보드 끝 -->
 
     <!-- 인쇄용 레이아웃 -->
     <div id="printArea" class="print-only">
@@ -146,8 +184,10 @@
             if (sessionStorage.getItem('adminLogged') === 'true') {
                 adminLoginForm.classList.add('hidden');
                 adminDashboard.classList.remove('hidden');
+                setDefaultDate();
                 loadStats();
                 loadSeal();
+                loadUsers();
             }
 
             document.getElementById('adminLoginBtn').addEventListener('click', async () => {
@@ -166,8 +206,10 @@
                         sessionStorage.setItem('adminLogged', 'true');
                         adminLoginForm.classList.add('hidden');
                         adminDashboard.classList.remove('hidden');
+                        setDefaultDate();
                         loadStats();
                         loadSeal();
+                        loadUsers();
                     } else {
                         alert(result.message);
                     }
@@ -314,10 +356,10 @@
 
                     html += `
                         <tr>
-                            <td style="white-space: nowrap;">${formatOnlyDate(row.date)}</td>
-                            <td style="white-space: nowrap; word-break: keep-all;">${row.name}</td>
-                            <td style="white-space: nowrap;">${formatTime(row.bootTime)}</td>
-                            <td style="white-space: nowrap;">${formatTime(row.offTime)}</td>
+                            <td data-label="날짜" style="white-space: nowrap;">${formatOnlyDate(row.date)}</td>
+                            <td data-label="이름" style="white-space: nowrap; word-break: keep-all;">${row.name}</td>
+                            <td data-label="출근(PC 켠 시간)" style="white-space: nowrap;">${formatTime(row.bootTime)}</td>
+                            <td data-label="퇴근(PC 끈 시간)" style="white-space: nowrap;">${formatTime(row.offTime)}</td>
                         </tr>
                     `;
                 });
@@ -466,6 +508,123 @@
 
                 window.print();
             });
+
+            // 기본 날짜를 오늘로 설정
+            function setDefaultDate() {
+                const tzOffset = new Date().getTimezoneOffset() * 60000;
+                const localISOTime = (new Date(Date.now() - tzOffset)).toISOString().slice(0, 10);
+                const filterDateEl = document.getElementById('filterDate');
+                if (filterDateEl && !filterDateEl.value) {
+                    filterDateEl.value = localISOTime;
+                }
+            }
+
+            // 탭 변경 로직
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    document.querySelectorAll('.tab-btn').forEach(b => {
+                        b.classList.remove('active');
+                        b.classList.add('secondary-button');
+                    });
+                    document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
+                    
+                    e.target.classList.add('active');
+                    e.target.classList.remove('secondary-button');
+                    document.getElementById(e.target.dataset.tab).style.display = 'block';
+                });
+            });
+
+            // 회원 정보 로드
+            async function loadUsers() {
+                const tbody = document.getElementById('usersTableBody');
+                if (!tbody) return;
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">회원 목록을 불러오는 중...</td></tr>';
+                try {
+                    const url = `${CONFIG.GAS_URL}?action=getUsers&t=${Date.now()}`;
+                    const response = await fetch(url);
+                    const result = await response.json();
+                    if(result.status === 'success') {
+                        renderUsers(result.data);
+                    } else {
+                        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:red;">회원 목록 불러오기 실패</td></tr>';
+                    }
+                } catch(e) {
+                    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:red;">통신 오류</td></tr>';
+                }
+            }
+
+            function renderUsers(users) {
+                const tbody = document.getElementById('usersTableBody');
+                let html = '';
+                users.forEach(user => {
+                    // admin 아이디는 숨기기
+                    if (user.team === 'admin' || user.name === 'admin') return; 
+
+                    html += `
+                        <tr>
+                            <td data-label="부서">${user.team}</td>
+                            <td data-label="이름" style="font-weight:bold;">${user.name}</td>
+                            <td data-label="직급">${user.role}</td>
+                            <td data-label="상태">
+                                <select class="status-select" data-name="${user.name}" style="width: 100%; max-width: 150px; padding: 5px;">
+                                    <option value="재직" ${user.status === '재직' ? 'selected' : ''}>재직</option>
+                                    <option value="휴직" ${user.status === '휴직' ? 'selected' : ''}>휴직</option>
+                                    <option value="퇴사" ${user.status === '퇴사' ? 'selected' : ''}>퇴사</option>
+                                </select>
+                            </td>
+                            <td data-label="비밀번호 재설정">
+                                <button class="secondary-button reset-pwd-btn" data-name="${user.name}" style="padding: 6px 12px; width: auto; font-size: 13px;">비밀번호 초기화</button>
+                            </td>
+                        </tr>
+                    `;
+                });
+                if(!html) html = '<tr><td colspan="5" style="text-align:center;">회원이 없습니다.</td></tr>';
+                tbody.innerHTML = html;
+
+                // 상태 변경 이벤트
+                document.querySelectorAll('.status-select').forEach(select => {
+                    select.addEventListener('change', async (e) => {
+                        const name = e.target.dataset.name;
+                        const status = e.target.value;
+                        if(confirm(`${name} 직원의 상태를 '${status}'(으)로 변경하시겠습니까?`)) {
+                            try {
+                                const url = `${CONFIG.GAS_URL}?action=updateUserStatus&name=${encodeURIComponent(name)}&status=${encodeURIComponent(status)}&t=${Date.now()}`;
+                                const response = await fetch(url);
+                                const result = await response.json();
+                                alert(result.message);
+                            } catch(err) {
+                                alert('상태 변경 실패');
+                                loadUsers(); // 원상복구
+                            }
+                        } else {
+                            loadUsers(); // 원상복구
+                        }
+                    });
+                });
+
+                // 비밀번호 초기화 이벤트
+                document.querySelectorAll('.reset-pwd-btn').forEach(btn => {
+                    btn.addEventListener('click', async (e) => {
+                        const name = e.target.dataset.name;
+                        const newPwd = prompt(`${name} 직원의 새 비밀번호(숫자 4자리)를 입력하세요:`);
+                        if (newPwd !== null) {
+                            if (!/^[0-9]{4}$/.test(newPwd)) {
+                                alert('비밀번호는 숫자 4자리여야 합니다.');
+                                return;
+                            }
+                            const hash = await sha256(newPwd);
+                            try {
+                                const url = `${CONFIG.GAS_URL}?action=resetUserPassword&name=${encodeURIComponent(name)}&newPasswordHash=${encodeURIComponent(hash)}&t=${Date.now()}`;
+                                const response = await fetch(url);
+                                const result = await response.json();
+                                alert(result.message);
+                            } catch(err) {
+                                alert('비밀번호 재설정 실패');
+                            }
+                        }
+                    });
+                });
+            }
         });
     </script>
 </body>

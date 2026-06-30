@@ -35,6 +35,12 @@ function doGet(e) {
     return getStats(e);
   } else if (action == "getSeal") {
     return getSeal(e);
+  } else if (action == "getUsers") {
+    return getUsers(e);
+  } else if (action == "updateUserStatus") {
+    return updateUserStatus(e);
+  } else if (action == "resetUserPassword") {
+    return resetUserPassword(e);
   }
   
   return ContentService.createTextOutput(JSON.stringify({"status": "error", "message": "Unknown action"})).setMimeType(ContentService.MimeType.JSON);
@@ -46,7 +52,7 @@ function getSheet(sheetName) {
   if (!sheet) {
     sheet = doc.insertSheet(sheetName);
     if (sheetName === "Users") {
-      sheet.appendRow(["Team", "Name", "Role", "Password", "IsAdmin"]);
+      sheet.appendRow(["Team", "Name", "Role", "Password", "IsAdmin", "Status"]);
       // 기본 관리자 추가 (비밀번호: 2026의 SHA-256 해시값 필요)
       // 프론트에서 '2026'을 해시해서 보내도록 해야함
     } else if (sheetName === "Logs") {
@@ -83,7 +89,7 @@ function registerUser(e) {
     }
   }
   
-  sheet.appendRow([team, name, role, passwordHash, "FALSE"]);
+  sheet.appendRow([team, name, role, passwordHash, "FALSE", "재직"]);
   return ContentService.createTextOutput(JSON.stringify({"status": "success", "message": "회원가입 완료"})).setMimeType(ContentService.MimeType.JSON);
 }
 
@@ -231,4 +237,55 @@ function getSeal(e) {
     sealData = data[1][2];
   }
   return ContentService.createTextOutput(JSON.stringify({"status": "success", "sealData": sealData})).setMimeType(ContentService.MimeType.JSON);
+}
+
+function getUsers(e) {
+  var sheet = getSheet("Users");
+  var data = sheet.getDataRange().getValues();
+  var users = [];
+  
+  for (var i = 1; i < data.length; i++) {
+    // If status is empty, default to "재직" (Active)
+    var status = data[i][5] ? data[i][5] : "재직";
+    users.push({
+      "team": data[i][0],
+      "name": data[i][1],
+      "role": data[i][2],
+      "status": status
+    });
+  }
+  
+  return ContentService.createTextOutput(JSON.stringify({"status": "success", "data": users})).setMimeType(ContentService.MimeType.JSON);
+}
+
+function updateUserStatus(e) {
+  var name = e.parameter.name;
+  var status = e.parameter.status;
+  
+  var sheet = getSheet("Users");
+  var data = sheet.getDataRange().getValues();
+  
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][1] == name) {
+      sheet.getRange(i + 1, 6).setValue(status);
+      return ContentService.createTextOutput(JSON.stringify({"status": "success", "message": "상태가 변경되었습니다."})).setMimeType(ContentService.MimeType.JSON);
+    }
+  }
+  return ContentService.createTextOutput(JSON.stringify({"status": "error", "message": "사용자를 찾을 수 없습니다."})).setMimeType(ContentService.MimeType.JSON);
+}
+
+function resetUserPassword(e) {
+  var name = e.parameter.name;
+  var newPasswordHash = e.parameter.newPasswordHash;
+  
+  var sheet = getSheet("Users");
+  var data = sheet.getDataRange().getValues();
+  
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][1] == name) {
+      sheet.getRange(i + 1, 4).setValue(newPasswordHash);
+      return ContentService.createTextOutput(JSON.stringify({"status": "success", "message": "비밀번호가 재설정되었습니다."})).setMimeType(ContentService.MimeType.JSON);
+    }
+  }
+  return ContentService.createTextOutput(JSON.stringify({"status": "error", "message": "사용자를 찾을 수 없습니다."})).setMimeType(ContentService.MimeType.JSON);
 }

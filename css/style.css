@@ -292,6 +292,43 @@ button:hover {
     box-shadow: 0 10px 30px rgba(0,0,0,0.2);
 }
 
+/* Tab Styles */
+.tab-header {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.tab-btn {
+    flex: 1;
+    padding: 12px;
+    border: none;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.4);
+    color: var(--primary-dark);
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.tab-btn.active {
+    background: var(--primary-color);
+    color: white;
+}
+
+.tab-btn:hover:not(.active) {
+    background: rgba(255, 255, 255, 0.7);
+}
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}
+
 /* Table for Admin */
 table {
     width: 100%;
@@ -482,11 +519,60 @@ tr:last-child td {
         display: none !important;
     }
 
-    /* Table Adjustments */
-    th, td {
-        padding: 10px 8px;
-        font-size: 13px;
+    /* Table Adjustments - Card Layout */
+    table#statsTable, table#usersTable {
+        border: none;
+        background: transparent;
+    }
+    
+    table#statsTable thead, table#usersTable thead {
+        display: none;
+    }
+    
+    table#statsTable tbody, table#usersTable tbody,
+    table#statsTable tr, table#usersTable tr,
+    table#statsTable td, table#usersTable td {
+        display: block;
+        width: 100%;
+        box-sizing: border-box;
+    }
+    
+    table#statsTable tr, table#usersTable tr {
+        margin-bottom: 15px;
+        background: rgba(255, 255, 255, 0.8);
+        border-radius: 10px;
+        padding: 10px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        border: 1px solid var(--glass-border);
+    }
+    
+    table#statsTable td, table#usersTable td {
+        text-align: right;
+        padding: 10px 10px 10px 45%;
+        position: relative;
+        border-bottom: 1px solid rgba(0,0,0,0.05);
+        white-space: normal !important;
+        font-size: 14px;
+        min-height: 24px;
+    }
+    
+    table#statsTable td:last-child, table#usersTable td:last-child {
+        border-bottom: none;
+    }
+    
+    table#statsTable td::before, table#usersTable td::before {
+        content: attr(data-label);
+        position: absolute;
+        left: 15px;
+        width: 40%;
+        text-align: left;
+        font-weight: bold;
+        color: var(--primary-dark);
         white-space: nowrap;
+    }
+
+    .tab-header {
+        flex-direction: column;
     }
     
     .time-display {
