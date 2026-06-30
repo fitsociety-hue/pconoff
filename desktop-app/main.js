@@ -58,7 +58,7 @@ function syncEventLogs(name) {
                 events.sort((a, b) => a.time - b.time);
                 
                 const bootIds = [1, 12, 6005, 6009, 7001];
-                const offIds = [1074, 6006, 6008, 42];
+                const offIds = [1074, 6006, 6008, 42, 7002];
                 
                 const dailyLogs = {};
                 
@@ -115,6 +115,7 @@ function syncEventLogs(name) {
 function sendSyncRequest(action, name) {
     if (!name) return;
     try {
+        const { spawn } = require('child_process');
         const now = new Date();
         const pad = (n) => n.toString().padStart(2, '0');
         const timeStr = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
@@ -122,14 +123,27 @@ function sendSyncRequest(action, name) {
         const timeParam = action === 'recordBoot' ? `bootTime=${encodeURIComponent(timeStr)}` : `offTime=${encodeURIComponent(timeStr)}`;
         const url = `${GAS_URL}?action=${action}&name=${encodeURIComponent(name)}&${timeParam}&isDesktop=true&t=${Date.now()}`;
         
-        // Windows 환경에서 동기적으로 HTTP 요청 보내기 (최대 5초 대기)
         try {
-            // 빠르고 안정적인 curl 우선 사용 (네트워크 종료 직전에 성공 확률 높임)
-            execSync(`curl.exe -s -L "${url}"`, { timeout: 3000, stdio: 'ignore' });
-            console.log(`Successfully sent ${action} for ${name} (Sync Fallback - curl)`);
+            // OS 종료 시 앱이 강제 종료되더라도 통신이 완료되도록 독립된(detached) 백그라운드 프로세스로 실행 (fire-and-forget)
+            const child = spawn('curl.exe', ['-s', '-L', url], {
+                detached: true,
+                stdio: 'ignore',
+                windowsHide: true
+            });
+            child.unref();
+            console.log(`Successfully spawned detached curl for ${action} for ${name}`);
         } catch(e) {
-            execSync(`powershell -Command "Invoke-RestMethod -Uri '${url}'"`, { timeout: 3000, stdio: 'ignore' });
-            console.log(`Successfully sent ${action} for ${name} (Sync Fallback - powershell)`);
+            try {
+                const child2 = spawn('powershell.exe', ['-WindowStyle', 'Hidden', '-Command', `Invoke-RestMethod -Uri '${url}'`], {
+                    detached: true,
+                    stdio: 'ignore',
+                    windowsHide: true
+                });
+                child2.unref();
+                console.log(`Successfully spawned detached powershell for ${action} for ${name}`);
+            } catch(e2) {
+                console.error("All detached request methods failed", e2);
+            }
         }
     } catch (e) {
         console.error(`Failed to send ${action}`, e);
