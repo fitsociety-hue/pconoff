@@ -123,8 +123,14 @@ function sendSyncRequest(action, name) {
         const url = `${GAS_URL}?action=${action}&name=${encodeURIComponent(name)}&${timeParam}&isDesktop=true&t=${Date.now()}`;
         
         // Windows 환경에서 동기적으로 HTTP 요청 보내기 (최대 5초 대기)
-        execSync(`powershell -Command "Invoke-RestMethod -Uri '${url}'"`, { timeout: 5000, stdio: 'ignore' });
-        console.log(`Successfully sent ${action} for ${name} (Sync Fallback)`);
+        try {
+            // 빠르고 안정적인 curl 우선 사용 (네트워크 종료 직전에 성공 확률 높임)
+            execSync(`curl.exe -s -L "${url}"`, { timeout: 3000, stdio: 'ignore' });
+            console.log(`Successfully sent ${action} for ${name} (Sync Fallback - curl)`);
+        } catch(e) {
+            execSync(`powershell -Command "Invoke-RestMethod -Uri '${url}'"`, { timeout: 3000, stdio: 'ignore' });
+            console.log(`Successfully sent ${action} for ${name} (Sync Fallback - powershell)`);
+        }
     } catch (e) {
         console.error(`Failed to send ${action}`, e);
     }
