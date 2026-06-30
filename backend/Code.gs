@@ -156,7 +156,8 @@ function getTodayString() {
 function recordBootTime(e) {
   var name = e.parameter.name;
   var bootTime = e.parameter.bootTime; // 클라이언트에서 보낸 타임스탬프 또는 부팅시간 문자열
-  var dateStr = getTodayString();
+  var logDate = e.parameter.logDate;
+  var dateStr = logDate ? logDate : getTodayString();
   
   var sheet = getSheet("Logs");
   var data = sheet.getDataRange().getValues();
@@ -182,7 +183,8 @@ function recordBootTime(e) {
 function recordOffTime(e) {
   var name = e.parameter.name;
   var offTime = e.parameter.offTime;
-  var dateStr = getTodayString();
+  var logDate = e.parameter.logDate;
+  var dateStr = logDate ? logDate : getTodayString();
   
   var sheet = getSheet("Logs");
   var data = sheet.getDataRange().getValues();

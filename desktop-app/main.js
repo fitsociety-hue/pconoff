@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Tray, Menu, dialog, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, Tray, Menu, dialog, shell, powerMonitor } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { execSync } = require('child_process');
@@ -26,47 +26,105 @@ function saveUserConfig(config) {
     fs.writeFileSync(CONFIG_PATH, JSON.stringify(config));
 }
 
-// Windows 이벤트 로그(6005, 6009, 1074, 6006, 6008)를 통해 부팅/종료 시간 추출
-function getEventLogTime(type) {
+// 이벤트 로그 동기화 (과거 3일치 스캔)
+function syncEventLogs(name) {
+    if (!name) return;
     try {
-        let psCommand = '';
-        if (type === 'boot') {
-            psCommand = `$today = (Get-Date).Date; $events = Get-WinEvent -FilterHashtable @{LogName='System'; Id=1,12,6005,6009,7001; StartTime=$today} -ErrorAction SilentlyContinue; if ($events) { $events | Sort-Object TimeCreated | Select-Object -First 1 -ExpandProperty TimeCreated | Get-Date -Format 'yyyy-MM-dd HH:mm:ss' } else { Get-Date -Format 'yyyy-MM-dd HH:mm:ss' }`;
-        } else if (type === 'off') {
-            psCommand = `$events = Get-WinEvent -FilterHashtable @{LogName='System'; Id=1074,6006,6008} -MaxEvents 1 -ErrorAction SilentlyContinue; if ($events -and ((Get-Date) - $events[0].TimeCreated).TotalMinutes -lt 10) { $events[0].TimeCreated | Get-Date -Format 'yyyy-MM-dd HH:mm:ss' } else { Get-Date -Format 'yyyy-MM-dd HH:mm:ss' }`;
-        }
-        
-        if (psCommand) {
-            const output = execSync(`powershell -Command "${psCommand}"`, { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
-            if (output) return output;
-        }
+        console.log("Starting event log sync...");
+        // 3일 전 자정 기준
+        const psCommand = `
+            $days = (Get-Date).AddDays(-3).Date;
+            $events = Get-WinEvent -FilterHashtable @{LogName='System'; Id=1,12,6005,6009,7001,1074,6006,6008,42; StartTime=$days} -ErrorAction SilentlyContinue | Select-Object TimeCreated, Id;
+            if ($events) { $events | ConvertTo-Json -Compress } else { "[]" }
+        `;
+        exec(`powershell -Command "${psCommand}"`, { encoding: 'utf-8', maxBuffer: 1024 * 1024 }, (error, stdout, stderr) => {
+            if (error) {
+                console.error("Failed to execute PowerShell command", error);
+                return;
+            }
+            
+            const output = stdout.trim();
+            if (!output || output === '') return;
+            
+            try {
+                const rawEvents = JSON.parse(output);
+                const events = (Array.isArray(rawEvents) ? rawEvents : [rawEvents]).map(e => {
+                    const match = e.TimeCreated.match(/\\\/Date\((\d+)\)\\\//);
+                    const ts = match ? parseInt(match[1], 10) : 0;
+                    return { time: ts, id: e.Id };
+                }).filter(e => e.time > 0);
+                
+                // 시간순 정렬 (오름차순)
+                events.sort((a, b) => a.time - b.time);
+                
+                const bootIds = [1, 12, 6005, 6009, 7001];
+                const offIds = [1074, 6006, 6008, 42];
+                
+                const dailyLogs = {};
+                
+                const pad = (n) => n.toString().padStart(2, '0');
+                const getKSTDateString = (dateObj) => {
+                    const kst = new Date(dateObj.toLocaleString("en-US", {timeZone: "Asia/Seoul"}));
+                    return `${kst.getFullYear()}-${pad(kst.getMonth()+1)}-${pad(kst.getDate())}`;
+                };
+                const getKSTTimeString = (dateObj) => {
+                    const kst = new Date(dateObj.toLocaleString("en-US", {timeZone: "Asia/Seoul"}));
+                    return `${kst.getFullYear()}-${pad(kst.getMonth()+1)}-${pad(kst.getDate())} ${pad(kst.getHours())}:${pad(kst.getMinutes())}:${pad(kst.getSeconds())}`;
+                };
+
+                events.forEach(e => {
+                    const d = new Date(e.time);
+                    const dateStr = getKSTDateString(d);
+                    const timeStr = getKSTTimeString(d);
+                    
+                    if (!dailyLogs[dateStr]) {
+                        dailyLogs[dateStr] = { bootTime: null, offTime: null };
+                    }
+                    
+                    if (bootIds.includes(e.id)) {
+                        if (!dailyLogs[dateStr].bootTime) {
+                            dailyLogs[dateStr].bootTime = timeStr;
+                        }
+                    } else if (offIds.includes(e.id)) {
+                        dailyLogs[dateStr].offTime = timeStr;
+                    }
+                });
+                
+                console.log("Parsed daily logs:", dailyLogs);
+                
+                for (const [dateStr, log] of Object.entries(dailyLogs)) {
+                    if (log.bootTime) {
+                        const url = `${GAS_URL}?action=recordBoot&name=${encodeURIComponent(name)}&bootTime=${encodeURIComponent(log.bootTime)}&logDate=${encodeURIComponent(dateStr)}&isDesktop=true&t=${Date.now()}`;
+                        exec(`powershell -Command "Invoke-RestMethod -Uri '${url}'"`, () => {});
+                    }
+                    if (log.offTime) {
+                        const url = `${GAS_URL}?action=recordOff&name=${encodeURIComponent(name)}&offTime=${encodeURIComponent(log.offTime)}&logDate=${encodeURIComponent(dateStr)}&isDesktop=true&t=${Date.now()}`;
+                        exec(`powershell -Command "Invoke-RestMethod -Uri '${url}'"`, () => {});
+                    }
+                }
+            } catch (e) {
+                console.error("JSON parse error for event logs", e);
+            }
+        });
     } catch (e) {
-        console.error(`Failed to get ${type} event log time`, e);
+        console.error("Failed to sync event logs", e);
     }
-    
-    // Fallback: 현재 시간
-    const now = new Date();
-    const pad = (n) => n.toString().padStart(2, '0');
-    return `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
 }
 
-// 동기 방식으로 GAS에 요청 전송 (종료 시 필요)
+// 동기 방식으로 GAS에 현재 시간 요청 전송 (종료/절전 시 즉각 반응용)
 function sendSyncRequest(action, name) {
     if (!name) return;
     try {
-        let timeStr;
-        if (action === 'recordBoot') {
-            timeStr = getEventLogTime('boot');
-        } else {
-            timeStr = getEventLogTime('off');
-        }
+        const now = new Date();
+        const pad = (n) => n.toString().padStart(2, '0');
+        const timeStr = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
         
         const timeParam = action === 'recordBoot' ? `bootTime=${encodeURIComponent(timeStr)}` : `offTime=${encodeURIComponent(timeStr)}`;
         const url = `${GAS_URL}?action=${action}&name=${encodeURIComponent(name)}&${timeParam}&isDesktop=true&t=${Date.now()}`;
         
         // Windows 환경에서 동기적으로 HTTP 요청 보내기 (최대 5초 대기)
         execSync(`powershell -Command "Invoke-RestMethod -Uri '${url}'"`, { timeout: 5000, stdio: 'ignore' });
-        console.log(`Successfully sent ${action} for ${name}`);
+        console.log(`Successfully sent ${action} for ${name} (Sync Fallback)`);
     } catch (e) {
         console.error(`Failed to send ${action}`, e);
     }
@@ -138,9 +196,24 @@ app.whenReady().then(() => {
         // 이름 설정이 안 되어있으면 창을 띄움
         mainWindow.show();
     } else {
-        // 이름이 설정되어 있으면 부팅 기록 전송
-        console.log("Sending boot record...");
-        sendSyncRequest('recordBoot', config.name);
+        // 이름이 설정되어 있으면 부팅 시 이벤트 로그 스캔을 통해 전송
+        console.log("Starting event log sync on boot...");
+        syncEventLogs(config.name);
+        
+        // 1시간 마다 이벤트 로그를 스캔하여 오프라인 기록 등 보완
+        setInterval(() => {
+            syncEventLogs(config.name);
+        }, 3600000);
+        
+        powerMonitor.on('suspend', () => {
+            console.log("System suspending. Sending quick off record...");
+            sendSyncRequest('recordOff', config.name);
+        });
+
+        powerMonitor.on('resume', () => {
+            console.log("System resuming. Syncing event logs...");
+            syncEventLogs(config.name);
+        });
     }
     
     // 시간외근무 체크 타이머 시작
@@ -228,9 +301,9 @@ ipcMain.on('save-config', (event, newName) => {
     config.name = newName;
     saveUserConfig(config);
     
-    // 처음 설정한 경우 즉시 부팅 기록 전송
+    // 처음 설정한 경우 즉시 부팅 기록 스캔
     if (isFirstTime && newName) {
-        sendSyncRequest('recordBoot', newName);
+        syncEventLogs(newName);
     }
     
     mainWindow.hide();
