@@ -3,5 +3,5 @@
 // 2. 배포 -> 새 배포 -> 웹 앱 -> 액세스 권한이 있는 사용자: '모든 사용자' 로 설정 (매우 중요! CORS 오류 방지)
 // 3. 발급받은 URL을 아래에 입력하세요.
 const CONFIG = {
-    GAS_URL: "https://script.google.com/macros/s/AKfycbxOHHpWE5IX1pikWQHni8VVW6D3NZdgHZDg7Z2sW9zRRlHV3pJUjvmPuLh_5Alq7mpx/exec"
+    GAS_URL: "https://script.google.com/macros/s/AKfycbz2nRL7fitLd_RDcQrj0l--8iSl7lvtf4aaSse3eIKuNdh7-gLIwzaGmoKYXsWteF8/exec"
 };

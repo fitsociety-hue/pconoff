@@ -4,7 +4,7 @@ const fs = require('fs');
 const { exec, spawn } = require('child_process');
 
 const CONFIG_PATH = path.join(app.getPath('userData'), 'user_config.json');
-const GAS_URL = "https://script.google.com/macros/s/AKfycbxOHHpWE5IX1pikWQHni8VVW6D3NZdgHZDg7Z2sW9zRRlHV3pJUjvmPuLh_5Alq7mpx/exec";
+const GAS_URL = "https://script.google.com/macros/s/AKfycbz2nRL7fitLd_RDcQrj0l--8iSl7lvtf4aaSse3eIKuNdh7-gLIwzaGmoKYXsWteF8/exec";
 
 let tray = null;
 let mainWindow = null;
