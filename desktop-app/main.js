@@ -90,29 +90,32 @@ function syncEventLogs(name) {
     if (!name) return;
     console.log("Starting event log sync...");
     
-    // 2일 전 기준, JSON 배열로 가져오기
-    const psCommand = `
-        $days = (Get-Date).AddDays(-2).Date;
-        $events = Get-WinEvent -FilterHashtable @{LogName='System'; Id=1,12,6005,6009,7001,7002,1074,6006,6008,42; StartTime=$days} -ErrorAction SilentlyContinue | Where-Object { $_.TimeCreated -ne $null -and ($_.Id -ne 1 -or $_.ProviderName -eq 'Microsoft-Windows-Power-Troubleshooter') };
-        if ($events) {
-            $events | Select-Object Id, ProviderName, @{Name="Time";Expression={$_.TimeCreated.ToString('yyyy-MM-dd HH:mm:ss')}} | ConvertTo-Json -Compress
-        } else {
-            '[]'
-        }
-    `;
+    // 2일 전(172,800,000ms) 기준
+    const command = `wevtutil qe System /q:"*[System[TimeCreated[timediff(@SystemTime) <= 172800000] and ((EventID=1 and Provider[@Name='Microsoft-Windows-Power-Troubleshooter']) or EventID=12 or EventID=6005 or EventID=6009 or EventID=7001 or EventID=7002 or EventID=1074 or EventID=6006 or EventID=6008 or EventID=42)]]" /f:xml`;
     
-    exec(`powershell -Command "${psCommand}"`, { encoding: 'utf-8', maxBuffer: 1024 * 1024 * 5 }, async (error, stdout, stderr) => {
+    exec(command, { encoding: 'utf-8', maxBuffer: 1024 * 1024 * 5 }, async (error, stdout, stderr) => {
         if (error) {
-            console.error("Failed to execute PowerShell command", error);
+            console.error("Failed to execute wevtutil command", error);
             return;
         }
         
-        const output = stdout.trim();
-        if (!output || output === '') return;
+        if (!stdout || stdout.trim() === '') return;
         
         try {
-            const rawEvents = JSON.parse(output);
-            const events = Array.isArray(rawEvents) ? rawEvents : [rawEvents];
+            const eventBlocks = stdout.split('</Event>');
+            const events = [];
+            for (const block of eventBlocks) {
+                const idMatch = block.match(/<EventID(?:[^>]*)>(\d+)<\/EventID>/);
+                const timeMatch = block.match(/<TimeCreated SystemTime='([^']+)'/);
+                if (idMatch && timeMatch) {
+                    const id = parseInt(idMatch[1], 10);
+                    const dateObj = new Date(timeMatch[1]);
+                    const kstDate = new Date(dateObj.getTime() + (9 * 60 * 60 * 1000));
+                    const pad = (n) => n.toString().padStart(2, '0');
+                    const timeStr = `${kstDate.getUTCFullYear()}-${pad(kstDate.getUTCMonth()+1)}-${pad(kstDate.getUTCDate())} ${pad(kstDate.getUTCHours())}:${pad(kstDate.getUTCMinutes())}:${pad(kstDate.getUTCSeconds())}`;
+                    events.push({ Id: id, Time: timeStr });
+                }
+            }
             
             // 시간순 정렬 (오름차순)
             events.sort((a, b) => a.Time.localeCompare(b.Time));
