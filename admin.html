@@ -194,7 +194,9 @@
                 const pwd = document.getElementById('adminPassword').value;
                 if(!pwd) return alert('비밀번호를 입력하세요.');
                 
-                document.getElementById('adminLoginBtn').disabled = true;
+                const loginBtn = document.getElementById('adminLoginBtn');
+                loginBtn.disabled = true;
+                loginBtn.textContent = '로그인 중...';
                 const hash = await sha256(pwd);
 
                 try {
@@ -216,7 +218,8 @@
                 } catch(e) {
                     alert('서버 통신 오류');
                 } finally {
-                    document.getElementById('adminLoginBtn').disabled = false;
+                    loginBtn.disabled = false;
+                    loginBtn.textContent = '로그인';
                 }
             });
 
