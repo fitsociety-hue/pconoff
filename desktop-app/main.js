@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, Tray, Menu, dialog, shell, powerMonitor } =
 const path = require('path');
 const fs = require('fs');
 const { exec, spawn } = require('child_process');
+const https = require('https');
 
 const CONFIG_PATH = path.join(app.getPath('userData'), 'user_config.json');
 const GAS_URL = "https://script.google.com/macros/s/AKfycbxOHHpWE5IX1pikWQHni8VVW6D3NZdgHZDg7Z2sW9zRRlHV3pJUjvmPuLh_5Alq7mpx/exec";
@@ -9,6 +10,9 @@ const GAS_URL = "https://script.google.com/macros/s/AKfycbxOHHpWE5IX1pikWQHni8VV
 let tray = null;
 let mainWindow = null;
 let isQuitting = false;
+let isQuittingFromTray = false;
+let safeToQuit = false;
+let shutdownHandled = false;
 
 // 사용자 설정 불러오기
 function getUserConfig() {
@@ -26,128 +30,141 @@ function saveUserConfig(config) {
     fs.writeFileSync(CONFIG_PATH, JSON.stringify(config));
 }
 
-// 이벤트 로그 동기화 (과거 3일치 스캔)
-function syncEventLogs(name) {
-    if (!name) return;
-    try {
-        console.log("Starting event log sync...");
-        // 3일 전 자정 기준, -ErrorAction SilentlyContinue 필요. 출력은 'Id,ProviderName,TimeStr' 형식
-        const psCommand = "$days = (Get-Date).AddDays(-3).Date; $events = Get-WinEvent -FilterHashtable @{LogName='System'; Id=1,12,6005,6009,7001,7002,1074,6006,6008,42; StartTime=$days} -ErrorAction SilentlyContinue; if ($events) { $events | ForEach-Object { '{0},{1},{2}' -f $_.Id, $_.ProviderName, $_.TimeCreated.ToString('yyyy-MM-dd HH:mm:ss') } }";
-        exec(`powershell -Command "${psCommand}"`, { encoding: 'utf-8', maxBuffer: 1024 * 1024 * 5 }, (error, stdout, stderr) => {
-            if (error) {
-                console.error("Failed to execute PowerShell command", error);
-                return;
-            }
-            
-            const output = stdout.trim();
-            if (!output || output === '') return;
-            
-            try {
-                const lines = output.split('\n').map(l => l.trim()).filter(l => l);
-                const events = lines.map(l => {
-                    const parts = l.split(',');
-                    if (parts.length >= 3) {
-                        return {
-                            id: parseInt(parts[0], 10),
-                            provider: parts[1],
-                            timeStr: parts.slice(2).join(',').trim()
-                        };
-                    }
-                    return null;
-                }).filter(e => e !== null);
-                
-                // 시간순 정렬 (오름차순) - 문자열 기반이지만 yyyy-MM-dd HH:mm:ss 형식이므로 올바르게 정렬됨
-                events.sort((a, b) => a.timeStr.localeCompare(b.timeStr));
-                
-                const bootIds = [12, 6005, 6009, 7001];
-                const offIds = [1074, 6006, 6008, 42, 7002];
-                
-                const dailyLogs = {};
-                
-                events.forEach(e => {
-                    // ID 1은 Power-Troubleshooter(절전 모드 해제)인 경우만 부팅(출근)으로 간주
-                    if (e.id === 1 && e.provider !== 'Microsoft-Windows-Power-Troubleshooter') {
-                        return;
-                    }
-                    
-                    const dateStr = e.timeStr.substring(0, 10);
-                    
-                    if (!dailyLogs[dateStr]) {
-                        dailyLogs[dateStr] = { bootTime: null, offTime: null };
-                    }
-                    
-                    if (bootIds.includes(e.id) || e.id === 1) {
-                        if (!dailyLogs[dateStr].bootTime) {
-                            dailyLogs[dateStr].bootTime = e.timeStr;
-                        }
-                    } else if (offIds.includes(e.id)) {
-                        dailyLogs[dateStr].offTime = e.timeStr;
-                    }
-                });
-                
-                console.log("Parsed daily logs:", dailyLogs);
-                
-                for (const [dateStr, log] of Object.entries(dailyLogs)) {
-                    if (log.bootTime) {
-                        const url = `${GAS_URL}?action=recordBoot&name=${encodeURIComponent(name)}&bootTime=${encodeURIComponent(log.bootTime)}&logDate=${encodeURIComponent(dateStr)}&isDesktop=true&t=${Date.now()}`;
-                        exec(`powershell -Command "Invoke-RestMethod -Uri '${url}'"`, () => {});
-                    }
-                    if (log.offTime) {
-                        const url = `${GAS_URL}?action=recordOff&name=${encodeURIComponent(name)}&offTime=${encodeURIComponent(log.offTime)}&logDate=${encodeURIComponent(dateStr)}&isDesktop=true&t=${Date.now()}`;
-                        exec(`powershell -Command "Invoke-RestMethod -Uri '${url}'"`, () => {});
-                    }
-                }
-            } catch (e) {
-                console.error("Parse error for event logs", e);
-            }
+// HTTP GET 요청 (순차 전송용)
+function sendSyncRequest(action, name, timeStr = null, logDate = null) {
+    if (!name) return Promise.resolve();
+    
+    return new Promise((resolve, reject) => {
+        const now = new Date();
+        const pad = (n) => n.toString().padStart(2, '0');
+        
+        if (!timeStr) {
+            timeStr = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+        }
+        if (!logDate) {
+            logDate = timeStr.substring(0, 10);
+        }
+        
+        const timeParam = action === 'recordBoot' ? `bootTime=${encodeURIComponent(timeStr)}` : `offTime=${encodeURIComponent(timeStr)}`;
+        const urlString = `${GAS_URL}?action=${action}&name=${encodeURIComponent(name)}&${timeParam}&logDate=${encodeURIComponent(logDate)}&isDesktop=true&t=${Date.now()}`;
+        
+        console.log(`Sending ${action} for ${name} at ${timeStr}`);
+        
+        https.get(urlString, (res) => {
+            let data = '';
+            res.on('data', (chunk) => data += chunk);
+            res.on('end', () => resolve(data));
+        }).on('error', (err) => {
+            console.error(`Failed to send ${action}:`, err);
+            resolve(); // 실패해도 Promise 체인이 깨지지 않도록 resolve 처리
         });
-    } catch (e) {
-        console.error("Failed to sync event logs", e);
-    }
+    });
 }
 
-// 동기 방식으로 GAS에 현재 시간 요청 전송 (종료/절전 시 즉각 반응용)
-function sendSyncRequest(action, name) {
+// OS 강제 종료/절전 등 비동기 응답을 기다릴 수 없는 경우를 대비한 Fire-and-forget
+function sendFireAndForgetRequest(action, name) {
     if (!name) return;
     try {
-        const { spawn } = require('child_process');
         const now = new Date();
         const pad = (n) => n.toString().padStart(2, '0');
         const timeStr = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+        const logDate = timeStr.substring(0, 10);
         
         const timeParam = action === 'recordBoot' ? `bootTime=${encodeURIComponent(timeStr)}` : `offTime=${encodeURIComponent(timeStr)}`;
-        const url = `${GAS_URL}?action=${action}&name=${encodeURIComponent(name)}&${timeParam}&isDesktop=true&t=${Date.now()}`;
+        const url = `${GAS_URL}?action=${action}&name=${encodeURIComponent(name)}&${timeParam}&logDate=${encodeURIComponent(logDate)}&isDesktop=true&t=${Date.now()}`;
         
-        try {
-            // OS 종료 시 앱이 강제 종료되더라도 통신이 완료되도록 독립된(detached) 백그라운드 프로세스로 실행 (fire-and-forget)
-            const child = spawn('curl.exe', ['-s', '-L', url], {
-                detached: true,
-                stdio: 'ignore',
-                windowsHide: true
-            });
-            child.unref();
-            console.log(`Successfully spawned detached curl for ${action} for ${name}`);
-        } catch(e) {
-            try {
-                const child2 = spawn('powershell.exe', ['-WindowStyle', 'Hidden', '-Command', `Invoke-RestMethod -Uri '${url}'`], {
-                    detached: true,
-                    stdio: 'ignore',
-                    windowsHide: true
-                });
-                child2.unref();
-                console.log(`Successfully spawned detached powershell for ${action} for ${name}`);
-            } catch(e2) {
-                console.error("All detached request methods failed", e2);
-            }
-        }
-    } catch (e) {
-        console.error(`Failed to send ${action}`, e);
+        const child = spawn('curl.exe', ['-s', '-L', url], {
+            detached: true,
+            stdio: 'ignore',
+            windowsHide: true
+        });
+        child.unref();
+        console.log(`Successfully spawned detached curl for ${action} for ${name}`);
+    } catch(e) {
+        console.error("FireAndForget failed", e);
     }
 }
 
+// 이벤트 로그 동기화 (과거 2일치 스캔 - 동시성 문제 방지)
+function syncEventLogs(name) {
+    if (!name) return;
+    console.log("Starting event log sync...");
+    
+    // 2일 전 기준, JSON 배열로 가져오기
+    const psCommand = `
+        $days = (Get-Date).AddDays(-2).Date;
+        $events = Get-WinEvent -FilterHashtable @{LogName='System'; Id=1,12,6005,6009,7001,7002,1074,6006,6008,42; StartTime=$days} -ErrorAction SilentlyContinue | Where-Object { $_.TimeCreated -ne $null };
+        if ($events) {
+            $events | Select-Object Id, ProviderName, @{Name="Time";Expression={$_.TimeCreated.ToString('yyyy-MM-dd HH:mm:ss')}} | ConvertTo-Json -Compress
+        } else {
+            '[]'
+        }
+    `;
+    
+    exec(`powershell -Command "${psCommand}"`, { encoding: 'utf-8', maxBuffer: 1024 * 1024 * 5 }, async (error, stdout, stderr) => {
+        if (error) {
+            console.error("Failed to execute PowerShell command", error);
+            return;
+        }
+        
+        const output = stdout.trim();
+        if (!output || output === '') return;
+        
+        try {
+            const rawEvents = JSON.parse(output);
+            const events = Array.isArray(rawEvents) ? rawEvents : [rawEvents];
+            
+            // 시간순 정렬 (오름차순)
+            events.sort((a, b) => a.Time.localeCompare(b.Time));
+            
+            const bootIds = [12, 6005, 6009, 7001];
+            const offIds = [1074, 6006, 6008, 42, 7002];
+            
+            const dailyLogs = {};
+            
+            events.forEach(e => {
+                if (e.Id === 1 && e.ProviderName !== 'Microsoft-Windows-Power-Troubleshooter') {
+                    return;
+                }
+                
+                const dateStr = e.Time.substring(0, 10);
+                
+                if (!dailyLogs[dateStr]) {
+                    dailyLogs[dateStr] = { bootTime: null, offTime: null };
+                }
+                
+                if (bootIds.includes(e.Id) || e.Id === 1) {
+                    // 가장 빠른 시간을 부팅 시간으로 기록 (최초 발견 시)
+                    if (!dailyLogs[dateStr].bootTime) {
+                        dailyLogs[dateStr].bootTime = e.Time;
+                    }
+                } else if (offIds.includes(e.Id)) {
+                    // 덮어씌워지며 최종적으로 가장 마지막 시간이 오프 시간으로 기록됨
+                    dailyLogs[dateStr].offTime = e.Time;
+                }
+            });
+            
+            console.log("Parsed daily logs:", dailyLogs);
+            
+            // 구글 앱스 스크립트(GAS) 동시성 오류 방지를 위해 순차적(Sequential) 전송
+            for (const [dateStr, log] of Object.entries(dailyLogs)) {
+                if (log.bootTime) {
+                    await sendSyncRequest('recordBoot', name, log.bootTime, dateStr);
+                    await new Promise(r => setTimeout(r, 500)); // 0.5초 대기
+                }
+                if (log.offTime) {
+                    await sendSyncRequest('recordOff', name, log.offTime, dateStr);
+                    await new Promise(r => setTimeout(r, 500)); // 0.5초 대기
+                }
+            }
+            console.log("Event log sync completed.");
+        } catch (e) {
+            console.error("Parse error for event logs", e);
+        }
+    });
+}
+
 function createTray() {
-    // 임시로 기본 아이콘 대신 null 처리 또는 나중에 아이콘 파일 추가 시 사용
-    // 아이콘이 없으면 에러가 나므로, 내장 아이콘 사용 우회
     tray = new Tray(path.join(__dirname, 'icon.png'));
     const contextMenu = Menu.buildFromTemplate([
         { label: '설정 열기', click: () => mainWindow.show() },
@@ -156,7 +173,7 @@ function createTray() {
         { 
             label: '완전 종료', 
             click: () => {
-                isQuitting = true;
+                isQuittingFromTray = true;
                 app.quit();
             } 
         }
@@ -185,7 +202,7 @@ function createWindow() {
 
     // 최소화 및 닫기 버튼 이벤트 (트레이로 숨김)
     mainWindow.on('close', (event) => {
-        if (!isQuitting) {
+        if (!isQuittingFromTray && !safeToQuit) {
             event.preventDefault();
             mainWindow.hide();
         }
@@ -199,30 +216,27 @@ app.setLoginItemSettings({
 });
 
 app.whenReady().then(() => {
-    // 트레이 아이콘 파일이 없을 때 앱이 터지지 않도록 예외 처리
     try {
         createTray();
-    } catch(e) { console.error("Tray error (missing icon?)"); }
+    } catch(e) { console.error("Tray error (missing icon?)", e); }
     
     createWindow();
 
     const config = getUserConfig();
     if (!config.name) {
-        // 이름 설정이 안 되어있으면 창을 띄움
         mainWindow.show();
     } else {
-        // 이름이 설정되어 있으면 부팅 시 이벤트 로그 스캔을 통해 전송
         console.log("Starting event log sync on boot...");
         syncEventLogs(config.name);
         
-        // 1시간 마다 이벤트 로그를 스캔하여 오프라인 기록 등 보완
+        // 1시간 마다 동기화 수행
         setInterval(() => {
             syncEventLogs(config.name);
         }, 3600000);
         
         powerMonitor.on('suspend', () => {
             console.log("System suspending. Sending quick off record...");
-            sendSyncRequest('recordOff', config.name);
+            sendFireAndForgetRequest('recordOff', config.name);
         });
 
         powerMonitor.on('resume', () => {
@@ -235,11 +249,9 @@ app.whenReady().then(() => {
     startOvertimeCheck();
 });
 
-// 하루에 한 번만 체크하기 위한 플래그
 let overtimeCheckedToday = false;
 
 function startOvertimeCheck() {
-    // 1분(60000ms)마다 현재 시간 확인
     setInterval(() => {
         const now = new Date();
         const kstTime = new Date(now.toLocaleString("en-US", {timeZone: "Asia/Seoul"}));
@@ -257,8 +269,7 @@ function startOvertimeCheck() {
                 message: '시간외근무 신청 여부를 확인해주세요.',
                 detail: '현재 대한민국 시간 18:09 입니다.\n오늘 시간외근무를 신청하셨습니까?'
             }).then(result => {
-                // '미신청' 버튼 (인덱스 1)
-                if (result.response === 1) {
+                if (result.response === 1) { // '미신청' 버튼
                     dialog.showMessageBox({
                         type: 'warning',
                         buttons: ['확인'],
@@ -269,37 +280,46 @@ function startOvertimeCheck() {
             });
         }
         
-        // 자정이 지나면 플래그 리셋
         if (hour === 0 && minute === 0) {
             overtimeCheckedToday = false;
         }
     }, 60000);
 }
 
-// Windows 시스템 종료 감지 로직
-let shutdownHandled = false;
-
-// before-quit은 사용자가 앱을 명시적으로 종료할 때 호출됨
+// 앱 완전 종료 전 퇴근 기록 남기기 (Timebox: 3초)
 app.on('before-quit', (e) => {
-    if (shutdownHandled) return;
+    if (safeToQuit) return;
+    
+    if (shutdownHandled) {
+        safeToQuit = true;
+        app.quit();
+        return;
+    }
     
     const config = getUserConfig();
     if (config.name) {
-        console.log("System shutting down. Sending off record...");
-        // 서버에 퇴근 시간 기록
-        sendSyncRequest('recordOff', config.name);
+        e.preventDefault(); // 일단 종료를 멈춤
+        console.log("System shutting down. Sending final off record...");
         shutdownHandled = true;
+        
+        const timeout = new Promise(resolve => setTimeout(resolve, 3000));
+        Promise.race([sendSyncRequest('recordOff', config.name), timeout]).then(() => {
+            safeToQuit = true;
+            app.quit(); // 동기화 완료 또는 타임아웃 시 실제 종료 진행
+        });
+    } else {
+        safeToQuit = true;
+        app.quit();
     }
 });
 
-// session-end는 Windows가 종료, 재시작, 로그오프 될 때 호출되어 더 확실하게 감지됨
 app.on('session-end', () => {
     if (shutdownHandled) return;
     
     const config = getUserConfig();
     if (config.name) {
-        console.log("System session ending. Sending off record...");
-        sendSyncRequest('recordOff', config.name);
+        console.log("System session ending. Sending quick off record...");
+        sendFireAndForgetRequest('recordOff', config.name);
         shutdownHandled = true;
     }
 });
@@ -316,7 +336,6 @@ ipcMain.on('save-config', (event, newName) => {
     config.name = newName;
     saveUserConfig(config);
     
-    // 처음 설정한 경우 즉시 부팅 기록 스캔
     if (isFirstTime && newName) {
         syncEventLogs(newName);
     }
