@@ -150,8 +150,18 @@ function syncEventLogs(name) {
             
             console.log("Parsed daily logs:", dailyLogs);
             
+            const now = new Date();
+            const pad = (n) => n.toString().padStart(2, '0');
+            const todayStr = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`;
+            
             // 구글 앱스 스크립트(GAS) 동시성 오류 방지를 위해 순차적(Sequential) 전송
+            // 백엔드의 recordOff가 무조건 최신(오늘) 행을 업데이트하는 버그가 있으므로 오늘 날짜만 전송
             for (const [dateStr, log] of Object.entries(dailyLogs)) {
+                if (dateStr !== todayStr) {
+                    console.log(`Skipping past date log: ${dateStr}`);
+                    continue;
+                }
+                
                 if (log.bootTime) {
                     await sendSyncRequest('recordBoot', name, log.bootTime, dateStr);
                     await new Promise(r => setTimeout(r, 500)); // 0.5초 대기
