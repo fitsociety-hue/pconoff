@@ -93,7 +93,7 @@ function syncEventLogs(name) {
     // 2일 전 기준, JSON 배열로 가져오기
     const psCommand = `
         $days = (Get-Date).AddDays(-2).Date;
-        $events = Get-WinEvent -FilterHashtable @{LogName='System'; Id=1,12,6005,6009,7001,7002,1074,6006,6008,42; StartTime=$days} -ErrorAction SilentlyContinue | Where-Object { $_.TimeCreated -ne $null };
+        $events = Get-WinEvent -FilterHashtable @{LogName='System'; Id=1,12,6005,6009,7001,7002,1074,6006,6008,42; StartTime=$days} -ErrorAction SilentlyContinue | Where-Object { $_.TimeCreated -ne $null -and ($_.Id -ne 1 -or $_.ProviderName -eq 'Microsoft-Windows-Power-Troubleshooter') };
         if ($events) {
             $events | Select-Object Id, ProviderName, @{Name="Time";Expression={$_.TimeCreated.ToString('yyyy-MM-dd HH:mm:ss')}} | ConvertTo-Json -Compress
         } else {
@@ -123,10 +123,6 @@ function syncEventLogs(name) {
             const dailyLogs = {};
             
             events.forEach(e => {
-                if (e.Id === 1 && e.ProviderName !== 'Microsoft-Windows-Power-Troubleshooter') {
-                    return;
-                }
-                
                 const dateStr = e.Time.substring(0, 10);
                 
                 if (!dailyLogs[dateStr]) {
@@ -286,31 +282,9 @@ function startOvertimeCheck() {
     }, 60000);
 }
 
-// 앱 완전 종료 전 퇴근 기록 남기기 (Timebox: 3초)
+// 앱 완전 종료 전 처리
 app.on('before-quit', (e) => {
-    if (safeToQuit) return;
-    
-    if (shutdownHandled) {
-        safeToQuit = true;
-        app.quit();
-        return;
-    }
-    
-    const config = getUserConfig();
-    if (config.name) {
-        e.preventDefault(); // 일단 종료를 멈춤
-        console.log("System shutting down. Sending final off record...");
-        shutdownHandled = true;
-        
-        const timeout = new Promise(resolve => setTimeout(resolve, 3000));
-        Promise.race([sendSyncRequest('recordOff', config.name), timeout]).then(() => {
-            safeToQuit = true;
-            app.quit(); // 동기화 완료 또는 타임아웃 시 실제 종료 진행
-        });
-    } else {
-        safeToQuit = true;
-        app.quit();
-    }
+    safeToQuit = true;
 });
 
 app.on('session-end', () => {
