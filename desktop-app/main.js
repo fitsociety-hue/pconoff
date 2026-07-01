@@ -1,8 +1,7 @@
-const { app, BrowserWindow, ipcMain, Tray, Menu, dialog, shell, powerMonitor } = require('electron');
+const { app, BrowserWindow, ipcMain, Tray, Menu, dialog, shell, powerMonitor, net } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { exec, spawn } = require('child_process');
-const https = require('https');
 
 const CONFIG_PATH = path.join(app.getPath('userData'), 'user_config.json');
 const GAS_URL = "https://script.google.com/macros/s/AKfycbxOHHpWE5IX1pikWQHni8VVW6D3NZdgHZDg7Z2sW9zRRlHV3pJUjvmPuLh_5Alq7mpx/exec";
@@ -50,14 +49,23 @@ function sendSyncRequest(action, name, timeStr = null, logDate = null) {
         
         console.log(`Sending ${action} for ${name} at ${timeStr}`);
         
-        https.get(urlString, (res) => {
-            let data = '';
-            res.on('data', (chunk) => data += chunk);
-            res.on('end', () => resolve(data));
-        }).on('error', (err) => {
-            console.error(`Failed to send ${action}:`, err);
-            resolve(); // 실패해도 Promise 체인이 깨지지 않도록 resolve 처리
-        });
+        if (app.isReady()) {
+            const request = net.request(urlString);
+            request.on('response', (response) => {
+                let data = '';
+                response.on('data', (chunk) => data += chunk);
+                response.on('end', () => resolve(data));
+            });
+            request.on('error', (err) => {
+                console.error(`Failed to send ${action}:`, err);
+                resolve(); // 실패해도 Promise 체인이 깨지지 않도록 resolve 처리
+            });
+            request.end();
+        } else {
+            exec(`curl.exe -s -L "${urlString}"`, { encoding: 'utf-8' }, (error, stdout) => {
+                resolve(stdout || '');
+            });
+        }
     });
 }
 
