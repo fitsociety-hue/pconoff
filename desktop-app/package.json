@@ -27,7 +27,8 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "출퇴근기록앱"
+      "shortcutName": "출퇴근기록앱",
+      "include": "build/installer.nsh"
     }
   }
 }
