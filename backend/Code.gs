@@ -192,7 +192,10 @@ function recordOffTime(e) {
   for (var i = data.length - 1; i >= 1; i--) {
     var rowDateStr = data[i][0] instanceof Date ? Utilities.formatDate(data[i][0], Session.getScriptTimeZone(), "yyyy-MM-dd") : String(data[i][0]).substring(0, 10);
     if (rowDateStr == dateStr && data[i][1] == name) {
-      sheet.getRange(i + 1, 4).setValue(offTime);
+      var existingOffTime = String(sheet.getRange(i + 1, 4).getValue());
+      if (existingOffTime == "" || existingOffTime == "-" || offTime > existingOffTime) {
+        sheet.getRange(i + 1, 4).setValue(offTime);
+      }
       return ContentService.createTextOutput(JSON.stringify({"status": "success", "message": "종료 시간 기록 완료"})).setMimeType(ContentService.MimeType.JSON);
     }
   }

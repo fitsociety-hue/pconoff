@@ -96,7 +96,7 @@ function syncEventLogs(name) {
     console.log("Starting event log sync...");
     
     // 2일 전(172,800,000ms) 기준
-    const command = `wevtutil qe System /q:"*[System[TimeCreated[timediff(@SystemTime) <= 172800000] and ((EventID=1 and Provider[@Name='Microsoft-Windows-Power-Troubleshooter']) or EventID=12 or EventID=6005 or EventID=6009 or EventID=7001 or EventID=7002 or EventID=1074 or EventID=6006 or EventID=6008 or EventID=42)]]" /f:xml`;
+    const command = `wevtutil qe System /q:"*[System[TimeCreated[timediff(@SystemTime) <= 172800000] and ((EventID=1 and Provider[@Name='Microsoft-Windows-Power-Troubleshooter']) or EventID=12 or EventID=6005 or EventID=6009 or EventID=7001 or EventID=7002 or EventID=1074 or EventID=42)]]" /f:xml`;
     
     exec(command, { encoding: 'utf-8', maxBuffer: 1024 * 1024 * 5 }, async (error, stdout, stderr) => {
         if (error) {
@@ -126,7 +126,7 @@ function syncEventLogs(name) {
             events.sort((a, b) => a.Time.localeCompare(b.Time));
             
             const bootIds = [12, 6005, 6009, 7001];
-            const offIds = [1074, 6006, 42, 7002]; // EventID 6008(비정상종료 후 부팅시 생성) 제외
+            const offIds = [1074, 42, 7002]; // EventID 6006(부팅 시 재시작될 수 있음), 6008 제외
             
             const dailyLogs = {};
             
@@ -155,12 +155,8 @@ function syncEventLogs(name) {
             const todayStr = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`;
             
             // 구글 앱스 스크립트(GAS) 동시성 오류 방지를 위해 순차적(Sequential) 전송
-            // 백엔드의 recordOff가 무조건 최신(오늘) 행을 업데이트하는 버그가 있으므로 오늘 날짜만 전송
+            // 백엔드 업데이트 로직 개선으로 과거 누락된 데이터도 안전하게 전송 가능
             for (const [dateStr, log] of Object.entries(dailyLogs)) {
-                if (dateStr !== todayStr) {
-                    console.log(`Skipping past date log: ${dateStr}`);
-                    continue;
-                }
                 
                 if (log.bootTime) {
                     await sendSyncRequest('recordBoot', name, log.bootTime, dateStr);
@@ -303,6 +299,14 @@ function startOvertimeCheck() {
 // 앱 완전 종료 전 처리
 app.on('before-quit', (e) => {
     safeToQuit = true;
+    if (!shutdownHandled) {
+        const config = getUserConfig();
+        if (config.name) {
+            console.log("App quitting. Sending quick off record...");
+            sendSyncShutdownRequest('recordOff', config.name);
+            shutdownHandled = true;
+        }
+    }
 });
 
 app.on('session-end', () => {
