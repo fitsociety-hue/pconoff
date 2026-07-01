@@ -69,10 +69,11 @@ function sendSyncRequest(action, name, timeStr = null, logDate = null) {
     });
 }
 
-// OS 강제 종료/절전 등 비동기 응답을 기다릴 수 없는 경우를 대비한 Fire-and-forget
-function sendFireAndForgetRequest(action, name) {
+// OS 강제 종료/절전 등 비동기 응답을 기다릴 수 없는 경우를 대비한 동기식 HTTP 요청
+function sendSyncShutdownRequest(action, name) {
     if (!name) return;
     try {
+        const { execSync } = require('child_process');
         const now = new Date();
         const pad = (n) => n.toString().padStart(2, '0');
         const timeStr = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
@@ -81,15 +82,11 @@ function sendFireAndForgetRequest(action, name) {
         const timeParam = action === 'recordBoot' ? `bootTime=${encodeURIComponent(timeStr)}` : `offTime=${encodeURIComponent(timeStr)}`;
         const url = `${GAS_URL}?action=${action}&name=${encodeURIComponent(name)}&${timeParam}&logDate=${encodeURIComponent(logDate)}&isDesktop=true&t=${Date.now()}`;
         
-        const child = spawn('curl.exe', ['-s', '-L', url], {
-            detached: true,
-            stdio: 'ignore',
-            windowsHide: true
-        });
-        child.unref();
-        console.log(`Successfully spawned detached curl for ${action} for ${name}`);
+        // 최대 3초 대기하며 동기적으로 실행 (OS 종료 지연 유도 및 네트워크 전송 보장)
+        execSync(`curl.exe -s -L -m 3 "${url}"`, { windowsHide: true, timeout: 3000 });
+        console.log(`Successfully sent sync request for ${action} for ${name}`);
     } catch(e) {
-        console.error("FireAndForget failed", e);
+        console.error("Sync shutdown request failed", e);
     }
 }
 
@@ -129,7 +126,7 @@ function syncEventLogs(name) {
             events.sort((a, b) => a.Time.localeCompare(b.Time));
             
             const bootIds = [12, 6005, 6009, 7001];
-            const offIds = [1074, 6006, 6008, 42, 7002];
+            const offIds = [1074, 6006, 42, 7002]; // EventID 6008(비정상종료 후 부팅시 생성) 제외
             
             const dailyLogs = {};
             
@@ -243,7 +240,7 @@ app.whenReady().then(() => {
         
         powerMonitor.on('suspend', () => {
             console.log("System suspending. Sending quick off record...");
-            sendFireAndForgetRequest('recordOff', config.name);
+            sendSyncShutdownRequest('recordOff', config.name);
         });
 
         powerMonitor.on('resume', () => {
@@ -304,7 +301,7 @@ app.on('session-end', () => {
     const config = getUserConfig();
     if (config.name) {
         console.log("System session ending. Sending quick off record...");
-        sendFireAndForgetRequest('recordOff', config.name);
+        sendSyncShutdownRequest('recordOff', config.name);
         shutdownHandled = true;
     }
 });
