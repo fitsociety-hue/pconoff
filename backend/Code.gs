@@ -199,7 +199,22 @@ function recordOffTime(e) {
       } else {
         existingOffTime = String(existingOffTimeValue);
       }
-      if (existingOffTime == "" || existingOffTime == "-" || offTime > existingOffTime) {
+      
+      var shouldUpdate = false;
+      if (existingOffTime == "" || existingOffTime == "-") {
+        shouldUpdate = true;
+      } else {
+        var newDate = new Date(String(offTime).replace(' ', 'T'));
+        var oldDate = new Date(existingOffTime.replace(' ', 'T'));
+        if (!isNaN(newDate.getTime()) && !isNaN(oldDate.getTime())) {
+          if (newDate >= oldDate) shouldUpdate = true;
+        } else {
+          // 문자열 파싱 실패 시 기본 문자열 비교로 Fallback
+          if (String(offTime) > existingOffTime) shouldUpdate = true;
+        }
+      }
+      
+      if (shouldUpdate) {
         sheet.getRange(i + 1, 4).setValue(offTime);
       }
       return ContentService.createTextOutput(JSON.stringify({"status": "success", "message": "종료 시간 기록 완료"})).setMimeType(ContentService.MimeType.JSON);
