@@ -192,7 +192,13 @@ function recordOffTime(e) {
   for (var i = data.length - 1; i >= 1; i--) {
     var rowDateStr = data[i][0] instanceof Date ? Utilities.formatDate(data[i][0], Session.getScriptTimeZone(), "yyyy-MM-dd") : String(data[i][0]).substring(0, 10);
     if (rowDateStr == dateStr && data[i][1] == name) {
-      var existingOffTime = String(sheet.getRange(i + 1, 4).getValue());
+      var existingOffTimeValue = sheet.getRange(i + 1, 4).getValue();
+      var existingOffTime = "";
+      if (existingOffTimeValue instanceof Date) {
+        existingOffTime = Utilities.formatDate(existingOffTimeValue, Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss");
+      } else {
+        existingOffTime = String(existingOffTimeValue);
+      }
       if (existingOffTime == "" || existingOffTime == "-" || offTime > existingOffTime) {
         sheet.getRange(i + 1, 4).setValue(offTime);
       }
