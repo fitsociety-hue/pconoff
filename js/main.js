@@ -187,7 +187,36 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
 
-
+        const shutdownBtn = document.getElementById('shutdownBtn');
+        if (shutdownBtn) {
+            shutdownBtn.addEventListener('click', async () => {
+                if (!confirm('PC를 종료하고 퇴근하시겠습니까?')) return;
+                
+                const now = new Date();
+                const offTime = formatDateTime(now);
+                shutdownBtn.disabled = true;
+                shutdownBtn.textContent = '종료 중...';
+                
+                try {
+                    const url = `${CONFIG.GAS_URL}?action=recordOff&name=${encodeURIComponent(currentUser.name)}&offTime=${encodeURIComponent(offTime)}&t=${Date.now()}`;
+                    await fetch(url);
+                    
+                    try {
+                        const { ipcRenderer } = require('electron');
+                        ipcRenderer.send('shutdown-pc', '');
+                    } catch(err) {
+                        alert('PC를 종료할 수 없습니다. (웹 환경에서는 동작하지 않습니다.)');
+                        shutdownBtn.disabled = false;
+                        shutdownBtn.textContent = '퇴근하기 (종료)';
+                    }
+                } catch (e) {
+                    console.error(e);
+                    alert('퇴근 시간 기록 중 오류가 발생했습니다.');
+                    shutdownBtn.disabled = false;
+                    shutdownBtn.textContent = '퇴근하기 (종료)';
+                }
+            });
+        }
 
 
         const logoutBtn = document.getElementById('logoutBtn');

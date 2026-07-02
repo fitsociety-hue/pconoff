@@ -660,6 +660,21 @@ ipcMain.on('save-config', (event, newName) => {
     mainWindow.hide();
 });
 
+ipcMain.on('shutdown-pc', () => {
+    console.log('Received shutdown-pc command from renderer.');
+    const config = getUserConfig();
+    if (config.name) {
+        // Send sync request to ensure log is saved before shutdown if not already done
+        sendSyncShutdownRequest('recordOff', config.name);
+    }
+    // Execute PC shutdown
+    exec('shutdown /s /t 0', (error, stdout, stderr) => {
+        if (error) {
+            console.error(`Error shutting down: ${error.message}`);
+        }
+    });
+});
+
 ipcMain.on('open-dashboard', () => {
     shell.openExternal('https://fitsociety-hue.github.io/pconoff/');
 });
