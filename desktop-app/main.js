@@ -89,16 +89,21 @@ function sendSyncRequest(action, name, timeStr = null, logDate = null) {
 function sendSyncShutdownRequest(action, name) {
     if (!name) return;
     try {
-        const { execSync } = require('child_process');
+        const { spawn } = require('child_process');
         let timeStr = formatDateTimeNow();
         const logDate = timeStr.substring(0, 10);
         
         const timeParam = action === 'recordBoot' ? `bootTime=${encodeURIComponent(timeStr)}` : `offTime=${encodeURIComponent(timeStr)}`;
         const url = `${GAS_URL}?action=${action}&name=${encodeURIComponent(name)}&${timeParam}&logDate=${encodeURIComponent(logDate)}&isDesktop=true&t=${Date.now()}`;
         
-        // 최대 3초 대기하며 동기적으로 실행 (OS 종료 지연 유도 및 네트워크 전송 보장)
-        execSync(`curl.exe -s -L -m 3 "${url}"`, { windowsHide: true, timeout: 3000 });
-        console.log(`Successfully sent sync request for ${action} for ${name} at ${timeStr}`);
+        // 비동기 detached curl을 사용하여 OS 강제 종료 시 Node 프로세스 블로킹 방지 및 프로세스 생존 유도
+        const child = spawn('curl.exe', ['-s', '-L', '-m', '10', url], {
+            detached: true,
+            stdio: 'ignore',
+            windowsHide: true
+        });
+        child.unref();
+        console.log(`Successfully spawned detached curl request for ${action} for ${name} at ${timeStr}`);
     } catch(e) {
         console.error("Sync shutdown request failed", e);
     }
@@ -342,7 +347,7 @@ try {
         $timeCreated = $record.TimeCreated
         if ($timeCreated) {
             $kstTime = $timeCreated.ToLocalTime()
-            $formatted = $kstTime.ToString("yyyy-MM-dd HH:mm:00")
+            $formatted = $kstTime.ToString("yyyy-MM-dd HH:mm:ss")
             $logDate = $kstTime.ToString("yyyy-MM-dd")
             Write-Output "SHUTDOWN_EVENT|$($record.Id)|$formatted"
             [Console]::Out.Flush()
@@ -353,7 +358,8 @@ try {
             $logDateParam = [uri]::EscapeDataString($logDate)
             $url = "${GAS_URL}?action=recordOff&name=$nameParam&offTime=$timeParam&logDate=$logDateParam&isDesktop=true&t=$($kstTime.Ticks)"
             try {
-                Invoke-RestMethod -Uri $url -Method Get -TimeoutSec 10 -ErrorAction SilentlyContinue | Out-Null
+                # Start-Process detached to survive PowerShell termination during shutdown
+                Start-Process -WindowStyle Hidden -FilePath "curl.exe" -ArgumentList "-s", "-L", "-m", "10", """$url"""
             } catch {}
         }
     } | Out-Null
@@ -400,8 +406,7 @@ try {
                 if (parts.length >= 3) {
                     const eventId = parts[1];
                     let timeStr = parts[2];
-                    // 초 단위 절사
-                    timeStr = timeStr.replace(/:\d{2}$/, ':00');
+                    // 초 단위 유지 (절사 안함)
                     const logDate = timeStr.substring(0, 10);
                     
                     console.log(`[Real-time] Shutdown event detected: EventID=${eventId}, Time=${timeStr}`);
@@ -545,8 +550,8 @@ app.whenReady().then(() => {
             console.log("OS shutdown detected via powerMonitor.");
             isOsShutdown = true;
             if (!shutdownHandled && config.name) {
-                console.log("Sending offTime on OS shutdown...");
-                sendSyncShutdownRequest('recordOff', config.name);
+                console.log("OS shutdown detected, Event Log watcher will handle the offTime transmission.");
+                // Event Log watcher가 정확한 종료 시간을 기록하도록 sendSyncShutdownRequest 생략
                 shutdownHandled = true;
             }
         });
@@ -607,9 +612,8 @@ app.on('before-quit', (e) => {
                 // 트레이에서 "완전 종료"를 선택한 경우: 앱만 종료하므로 offTime 기록하지 않음
                 console.log("App quitting from tray. Not recording offTime (app-only exit).");
             } else if (isOsShutdown) {
-                // OS 종료가 감지된 경우: offTime 기록
-                console.log("App quitting due to OS shutdown. Sending offTime...");
-                sendSyncShutdownRequest('recordOff', config.name);
+                // OS 종료가 감지된 경우: Event Log watcher가 전송할 것이므로 여기서는 스킵
+                console.log("App quitting due to OS shutdown. Event Log watcher handles offTime.");
             } else {
                 // 앱만 종료되는 경우 (설치 프로그램에 의한 종료 등)
                 // offTime을 기록하지 않음 — 다음 부팅 시 6006 이벤트로 정확한 종료 시간이 기록됨
@@ -629,8 +633,7 @@ app.on('session-end', () => {
     
     const config = getUserConfig();
     if (config.name) {
-        console.log("System session ending (logoff/shutdown/restart). Sending offTime...");
-        sendSyncShutdownRequest('recordOff', config.name);
+        console.log("System session ending (logoff/shutdown/restart). Event Log watcher handles offTime.");
         shutdownHandled = true;
     }
 });
