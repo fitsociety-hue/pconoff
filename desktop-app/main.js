@@ -91,10 +91,6 @@ function sendSyncShutdownRequest(action, name) {
     try {
         const { execSync } = require('child_process');
         let timeStr = formatDateTimeNow();
-        // 퇴근(PC 끈 시간) 기록 시 초 단위 00초로 절사
-        if (action === 'recordOff') {
-            timeStr = timeStr.replace(/:\d{2}$/, ':00');
-        }
         const logDate = timeStr.substring(0, 10);
         
         const timeParam = action === 'recordBoot' ? `bootTime=${encodeURIComponent(timeStr)}` : `offTime=${encodeURIComponent(timeStr)}`;
@@ -123,8 +119,7 @@ function parseEventsFromXml(stdout) {
             const id = parseInt(idMatch[1], 10);
             const dateObj = new Date(timeMatch[1]);
             const kstDate = new Date(dateObj.getTime() + (9 * 60 * 60 * 1000));
-            // 퇴근시간 일관성을 위해 초는 00초로 절사
-            const timeStr = `${kstDate.getUTCFullYear()}-${pad(kstDate.getUTCMonth()+1)}-${pad(kstDate.getUTCDate())} ${pad(kstDate.getUTCHours())}:${pad(kstDate.getUTCMinutes())}:00`;
+            const timeStr = `${kstDate.getUTCFullYear()}-${pad(kstDate.getUTCMonth()+1)}-${pad(kstDate.getUTCDate())} ${pad(kstDate.getUTCHours())}:${pad(kstDate.getUTCMinutes())}:${pad(kstDate.getUTCSeconds())}`;
             events.push({ Id: id, Time: timeStr });
         }
     }
