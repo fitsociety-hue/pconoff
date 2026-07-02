@@ -535,10 +535,10 @@ app.whenReady().then(() => {
         // 3. 실시간 종료 이벤트 감시 시작
         startShutdownWatcher(config.name);
         
-        // 4. 10분마다 정기 동기화 수행 (6006 이벤트 빠르게 반영)
+        // 4. 1분마다 정기 동기화 수행 (6006 이벤트 실시간 반영)
         setInterval(() => {
             syncEventLogs(config.name);
-        }, 600000);
+        }, 60000);
         
         powerMonitor.on('suspend', () => {
             console.log("System suspending. Sending quick off record...");
