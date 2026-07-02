@@ -281,28 +281,13 @@ function syncLastShutdownTime(name) {
     if (!name) return;
     console.log("Syncing last shutdown time from previous session...");
     
-    // 6006(정상 종료) 이벤트만 우선 검색 — 가장 신뢰도 높은 종료 기록
-    const command6006 = `wevtutil qe System /q:"*[System[TimeCreated[timediff(@SystemTime) <= 259200000] and EventID=6006]]" /f:xml /rd:true /c:10`;
-    // 6006이 없으면 fallback으로 다른 종료 이벤트도 검색
-    const commandAll = `wevtutil qe System /q:"*[System[TimeCreated[timediff(@SystemTime) <= 259200000] and (EventID=1074 or EventID=42 or EventID=7002 or EventID=6006 or EventID=13)]]" /f:xml /rd:true /c:10`;
+    // 가장 신뢰도 높은 종료 이벤트 및 사용자 종료 이벤트 모두 통합 검색
+    const commandAll = `wevtutil qe System /q:"*[System[TimeCreated[timediff(@SystemTime) <= 259200000] and (EventID=1074 or EventID=42 or EventID=7002 or EventID=6006 or EventID=13)]]" /f:xml /rd:true /c:20`;
     
-    exec(command6006, { encoding: 'utf-8', maxBuffer: 1024 * 1024 }, async (error, stdout) => {
+    exec(commandAll, { encoding: 'utf-8', maxBuffer: 1024 * 1024 }, async (error, stdout) => {
         let events = [];
         if (!error) {
             events = parseEventsFromXml(stdout);
-        }
-        
-        // 6006 이벤트가 없으면 다른 종료 이벤트로 fallback
-        if (events.length === 0) {
-            console.log("No 6006 events found, falling back to all shutdown events...");
-            try {
-                const { execSync } = require('child_process');
-                const fallbackStdout = execSync(commandAll, { encoding: 'utf-8', maxBuffer: 1024 * 1024, windowsHide: true });
-                events = parseEventsFromXml(fallbackStdout);
-            } catch (fallbackErr) {
-                console.error("Fallback shutdown event query also failed", fallbackErr);
-                return;
-            }
         }
         
         if (events.length === 0) {
@@ -310,23 +295,7 @@ function syncLastShutdownTime(name) {
             return;
         }
         
-        // 현재 부팅 시간 (이 앱이 시작된 시간) 이전의 이벤트만 선택
-        const appStartTime = formatDateTimeNow();
-        
-        // 가장 최근 종료 이벤트 (parseEventsFromXml이 오름차순 정렬하므로 마지막 요소가 가장 최근)
-        const lastOff = events[events.length - 1];
-        const offDateStr = lastOff.Time.substring(0, 10);
-        
-        // 같은 날이든 과거 날짜든 상관없이 항상 전송
-        // 서버 측에서 offTime > existingOffTime 조건으로 중복 방지
-        console.log(`Found shutdown event (EventID=${lastOff.Id}) at ${lastOff.Time}, sending to server...`);
-        await sendSyncRequest('recordOff', name, lastOff.Time, offDateStr);
-        
-        // 추가: 과거 날짜(어제 이전)의 종료 이벤트도 날짜별로 전송
-        const todayStr = getTodayStr();
-        const sentDates = new Set([offDateStr]);
-        
-        // 날짜별로 가장 마지막 종료 이벤트를 찾아 전송
+        // 날짜별로 가장 마지막 종료 이벤트를 찾아 전송 (과거 기록 복구)
         const dateMap = {};
         for (const ev of events) {
             const evDateStr = ev.Time.substring(0, 10);
@@ -335,9 +304,9 @@ function syncLastShutdownTime(name) {
             }
         }
         
+        const sentDates = new Set();
         for (const [dateStr, ev] of Object.entries(dateMap)) {
-            if (sentDates.has(dateStr)) continue;
-            console.log(`Found past shutdown event for ${dateStr} (EventID=${ev.Id}) at ${ev.Time}, sending to server...`);
+            console.log(`[Recovery] Found past shutdown event for ${dateStr} (EventID=${ev.Id}) at ${ev.Time}, sending to server...`);
             await sendSyncRequest('recordOff', name, ev.Time, dateStr);
             await new Promise(r => setTimeout(r, 500));
             sentDates.add(dateStr);
@@ -378,9 +347,19 @@ try {
         $timeCreated = $record.TimeCreated
         if ($timeCreated) {
             $kstTime = $timeCreated.ToLocalTime()
-            $formatted = $kstTime.ToString("yyyy-MM-dd HH:mm:ss")
+            $formatted = $kstTime.ToString("yyyy-MM-dd HH:mm:00")
+            $logDate = $kstTime.ToString("yyyy-MM-dd")
             Write-Output "SHUTDOWN_EVENT|$($record.Id)|$formatted"
             [Console]::Out.Flush()
+            
+            # PowerShell에서 직접 서버로 HTTP 요청 전송 (Node.js 종료 시 대비)
+            $nameParam = [uri]::EscapeDataString("${name}")
+            $timeParam = [uri]::EscapeDataString($formatted)
+            $logDateParam = [uri]::EscapeDataString($logDate)
+            $url = "${GAS_URL}?action=recordOff&name=$nameParam&offTime=$timeParam&logDate=$logDateParam&isDesktop=true&t=$($kstTime.Ticks)"
+            try {
+                Invoke-RestMethod -Uri $url -Method Get -TimeoutSec 10 -ErrorAction SilentlyContinue | Out-Null
+            } catch {}
         }
     } | Out-Null
     
