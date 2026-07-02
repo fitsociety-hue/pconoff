@@ -1,6 +1,6 @@
 {
   "name": "onoff-monitor",
-  "version": "1.0.10",
+  "version": "1.0.11",
   "description": "PC Auto Boot/Shutdown Monitor",
   "main": "main.js",
   "scripts": {
@@ -18,7 +18,10 @@
     "appId": "com.fitsociety.onoff",
     "productName": "출퇴근기록앱",
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "certificateFile": "cert.pfx",
+      "certificatePassword": "1234",
+      "verifyUpdateCodeSignature": false
     },
     "nsis": {
       "oneClick": false,
