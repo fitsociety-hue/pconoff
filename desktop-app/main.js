@@ -13,6 +13,7 @@ let isQuittingFromTray = false;
 let safeToQuit = false;
 let shutdownHandled = false;
 let shutdownWatcherProcess = null;
+let isOsShutdown = false;  // OS 종료/재시작에 의한 종료인지 여부
 
 // 사용자 설정 불러오기
 function getUserConfig() {
@@ -264,32 +265,72 @@ function syncEventLogs(name) {
 // ============================================================
 // 부팅 시 과거 종료 시간 역추적
 // 마지막으로 기록하지 못한 종료 시간을 찾아서 전송
+// Event ID 6006 (정상 종료)을 최우선으로 사용
 // ============================================================
 function syncLastShutdownTime(name) {
     if (!name) return;
     console.log("Syncing last shutdown time from previous session...");
     
-    // 최근 3일 이내의 종료 이벤트만 검색
-    const command = `wevtutil qe System /q:"*[System[TimeCreated[timediff(@SystemTime) <= 259200000] and (EventID=1074 or EventID=42 or EventID=7002 or EventID=6006 or EventID=13)]]" /f:xml /rd:true /c:10`;
+    // 6006(정상 종료) 이벤트만 우선 검색 — 가장 신뢰도 높은 종료 기록
+    const command6006 = `wevtutil qe System /q:"*[System[TimeCreated[timediff(@SystemTime) <= 259200000] and EventID=6006]]" /f:xml /rd:true /c:10`;
+    // 6006이 없으면 fallback으로 다른 종료 이벤트도 검색
+    const commandAll = `wevtutil qe System /q:"*[System[TimeCreated[timediff(@SystemTime) <= 259200000] and (EventID=1074 or EventID=42 or EventID=7002 or EventID=6006 or EventID=13)]]" /f:xml /rd:true /c:10`;
     
-    exec(command, { encoding: 'utf-8', maxBuffer: 1024 * 1024 }, async (error, stdout) => {
-        if (error) {
-            console.error("Failed to get last shutdown time", error);
+    exec(command6006, { encoding: 'utf-8', maxBuffer: 1024 * 1024 }, async (error, stdout) => {
+        let events = [];
+        if (!error) {
+            events = parseEventsFromXml(stdout);
+        }
+        
+        // 6006 이벤트가 없으면 다른 종료 이벤트로 fallback
+        if (events.length === 0) {
+            console.log("No 6006 events found, falling back to all shutdown events...");
+            try {
+                const { execSync } = require('child_process');
+                const fallbackStdout = execSync(commandAll, { encoding: 'utf-8', maxBuffer: 1024 * 1024, windowsHide: true });
+                events = parseEventsFromXml(fallbackStdout);
+            } catch (fallbackErr) {
+                console.error("Fallback shutdown event query also failed", fallbackErr);
+                return;
+            }
+        }
+        
+        if (events.length === 0) {
+            console.log("No shutdown events found in recent history.");
             return;
         }
         
-        const events = parseEventsFromXml(stdout);
-        if (events.length === 0) return;
+        // 현재 부팅 시간 (이 앱이 시작된 시간) 이전의 이벤트만 선택
+        const appStartTime = formatDateTimeNow();
         
-        // 가장 최근 종료 이벤트 (역순으로 가져왔지만 parseEventsFromXml이 정렬하므로 마지막 요소가 가장 최근)
+        // 가장 최근 종료 이벤트 (parseEventsFromXml이 오름차순 정렬하므로 마지막 요소가 가장 최근)
         const lastOff = events[events.length - 1];
         const offDateStr = lastOff.Time.substring(0, 10);
-        const todayStr = getTodayStr();
         
-        // 오늘이 아닌 과거 날짜의 종료 이벤트라면 전송
-        if (offDateStr !== todayStr) {
-            console.log(`Found previous shutdown at ${lastOff.Time}, sending to server...`);
-            await sendSyncRequest('recordOff', name, lastOff.Time, offDateStr);
+        // 같은 날이든 과거 날짜든 상관없이 항상 전송
+        // 서버 측에서 offTime > existingOffTime 조건으로 중복 방지
+        console.log(`Found shutdown event (EventID=${lastOff.Id}) at ${lastOff.Time}, sending to server...`);
+        await sendSyncRequest('recordOff', name, lastOff.Time, offDateStr);
+        
+        // 추가: 과거 날짜(어제 이전)의 종료 이벤트도 날짜별로 전송
+        const todayStr = getTodayStr();
+        const sentDates = new Set([offDateStr]);
+        
+        // 날짜별로 가장 마지막 종료 이벤트를 찾아 전송
+        const dateMap = {};
+        for (const ev of events) {
+            const evDateStr = ev.Time.substring(0, 10);
+            if (!dateMap[evDateStr] || ev.Time > dateMap[evDateStr].Time) {
+                dateMap[evDateStr] = ev;
+            }
+        }
+        
+        for (const [dateStr, ev] of Object.entries(dateMap)) {
+            if (sentDates.has(dateStr)) continue;
+            console.log(`Found past shutdown event for ${dateStr} (EventID=${ev.Id}) at ${ev.Time}, sending to server...`);
+            await sendSyncRequest('recordOff', name, ev.Time, dateStr);
+            await new Promise(r => setTimeout(r, 500));
+            sentDates.add(dateStr);
         }
     });
 }
@@ -494,10 +535,10 @@ app.whenReady().then(() => {
         // 3. 실시간 종료 이벤트 감시 시작
         startShutdownWatcher(config.name);
         
-        // 4. 1시간 마다 정기 동기화 수행
+        // 4. 10분마다 정기 동기화 수행 (6006 이벤트 빠르게 반영)
         setInterval(() => {
             syncEventLogs(config.name);
-        }, 3600000);
+        }, 600000);
         
         powerMonitor.on('suspend', () => {
             console.log("System suspending. Sending quick off record...");
@@ -506,9 +547,22 @@ app.whenReady().then(() => {
 
         powerMonitor.on('resume', () => {
             console.log("System resuming. Syncing event logs...");
-            syncEventLogs(config.name);
+            // 절전 복귀 시 이전 종료 이벤트 역추적
+            syncLastShutdownTime(config.name);
+            setTimeout(() => syncEventLogs(config.name), 2000);
             // watcher가 죽었을 수 있으므로 재시작
             startShutdownWatcher(config.name);
+        });
+
+        // OS 종료/재시작 감지 (Electron의 shutdown 이벤트)
+        powerMonitor.on('shutdown', () => {
+            console.log("OS shutdown detected via powerMonitor.");
+            isOsShutdown = true;
+            if (!shutdownHandled && config.name) {
+                console.log("Sending offTime on OS shutdown...");
+                sendSyncShutdownRequest('recordOff', config.name);
+                shutdownHandled = true;
+            }
         });
     }
     
@@ -566,10 +620,15 @@ app.on('before-quit', (e) => {
             if (isQuittingFromTray) {
                 // 트레이에서 "완전 종료"를 선택한 경우: 앱만 종료하므로 offTime 기록하지 않음
                 console.log("App quitting from tray. Not recording offTime (app-only exit).");
-            } else {
-                // OS 종료 또는 다른 이유로 종료되는 경우: offTime 기록
-                console.log("App quitting (OS shutdown/logoff). Sending quick off record...");
+            } else if (isOsShutdown) {
+                // OS 종료가 감지된 경우: offTime 기록
+                console.log("App quitting due to OS shutdown. Sending offTime...");
                 sendSyncShutdownRequest('recordOff', config.name);
+            } else {
+                // 앱만 종료되는 경우 (설치 프로그램에 의한 종료 등)
+                // offTime을 기록하지 않음 — 다음 부팅 시 6006 이벤트로 정확한 종료 시간이 기록됨
+                console.log("App quitting (not OS shutdown). Skipping offTime to avoid inaccurate recording.");
+                console.log("The accurate shutdown time will be synced from Event ID 6006 on next boot.");
             }
             shutdownHandled = true;
         }
@@ -577,12 +636,14 @@ app.on('before-quit', (e) => {
 });
 
 app.on('session-end', () => {
+    // OS 세션 종료 시 (로그오프, 종료, 재시작) — OS 종료 플래그 설정 및 offTime 기록
+    isOsShutdown = true;
+    
     if (shutdownHandled) return;
     
-    // OS 세션 종료 시 (로그오프, 종료, 재시작) offTime 기록
     const config = getUserConfig();
     if (config.name) {
-        console.log("System session ending. Sending quick off record...");
+        console.log("System session ending (logoff/shutdown/restart). Sending offTime...");
         sendSyncShutdownRequest('recordOff', config.name);
         shutdownHandled = true;
     }
