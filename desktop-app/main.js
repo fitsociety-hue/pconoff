@@ -90,7 +90,11 @@ function sendSyncShutdownRequest(action, name) {
     if (!name) return;
     try {
         const { execSync } = require('child_process');
-        const timeStr = formatDateTimeNow();
+        let timeStr = formatDateTimeNow();
+        // 퇴근(PC 끈 시간) 기록 시 초 단위 00초로 절사
+        if (action === 'recordOff') {
+            timeStr = timeStr.replace(/:\d{2}$/, ':00');
+        }
         const logDate = timeStr.substring(0, 10);
         
         const timeParam = action === 'recordBoot' ? `bootTime=${encodeURIComponent(timeStr)}` : `offTime=${encodeURIComponent(timeStr)}`;
@@ -119,7 +123,8 @@ function parseEventsFromXml(stdout) {
             const id = parseInt(idMatch[1], 10);
             const dateObj = new Date(timeMatch[1]);
             const kstDate = new Date(dateObj.getTime() + (9 * 60 * 60 * 1000));
-            const timeStr = `${kstDate.getUTCFullYear()}-${pad(kstDate.getUTCMonth()+1)}-${pad(kstDate.getUTCDate())} ${pad(kstDate.getUTCHours())}:${pad(kstDate.getUTCMinutes())}:${pad(kstDate.getUTCSeconds())}`;
+            // 퇴근시간 일관성을 위해 초는 00초로 절사
+            const timeStr = `${kstDate.getUTCFullYear()}-${pad(kstDate.getUTCMonth()+1)}-${pad(kstDate.getUTCDate())} ${pad(kstDate.getUTCHours())}:${pad(kstDate.getUTCMinutes())}:00`;
             events.push({ Id: id, Time: timeStr });
         }
     }
@@ -197,8 +202,13 @@ function syncEventLogs(name) {
                     // 현재 종료 이벤트 이후의 이벤트 확인
                     for (let j = i + 1; j < dayEvents.length; j++) {
                         if (bootIds.includes(dayEvents[j].Id)) {
-                            // 종료 후 같은 날 부팅이 있으면 → 재부팅
-                            isReboot = true;
+                            // 종료 후 5분 이내에 부팅이 있으면 재부팅으로 간주 (그 외엔 정상 종료 후 재출근으로 간주)
+                            const offTimeObj = new Date(ev.Time.replace(' ', 'T'));
+                            const bootTimeObj = new Date(dayEvents[j].Time.replace(' ', 'T'));
+                            const diffMinutes = (bootTimeObj - offTimeObj) / (1000 * 60);
+                            if (diffMinutes <= 5) {
+                                isReboot = true;
+                            }
                             break;
                         }
                     }
@@ -415,7 +425,9 @@ try {
                 const parts = trimmed.split('|');
                 if (parts.length >= 3) {
                     const eventId = parts[1];
-                    const timeStr = parts[2];
+                    let timeStr = parts[2];
+                    // 초 단위 절사
+                    timeStr = timeStr.replace(/:\d{2}$/, ':00');
                     const logDate = timeStr.substring(0, 10);
                     
                     console.log(`[Real-time] Shutdown event detected: EventID=${eventId}, Time=${timeStr}`);
