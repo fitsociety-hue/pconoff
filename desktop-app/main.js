@@ -96,14 +96,28 @@ function sendSyncShutdownRequest(action, name) {
         const timeParam = action === 'recordBoot' ? `bootTime=${encodeURIComponent(timeStr)}` : `offTime=${encodeURIComponent(timeStr)}`;
         const url = `${GAS_URL}?action=${action}&name=${encodeURIComponent(name)}&${timeParam}&logDate=${encodeURIComponent(logDate)}&isDesktop=true&t=${Date.now()}`;
         
-        // 비동기 detached curl을 사용하여 OS 강제 종료 시 Node 프로세스 블로킹 방지 및 프로세스 생존 유도
-        const child = spawn('curl.exe', ['-s', '-L', '-m', '10', url], {
-            detached: true,
-            stdio: 'ignore',
-            windowsHide: true
-        });
-        child.unref();
-        console.log(`Successfully spawned detached curl request for ${action} for ${name} at ${timeStr}`);
+        try {
+            // 비동기 detached curl을 사용하여 OS 강제 종료 시 Node 프로세스 블로킹 방지 및 프로세스 생존 유도
+            const child = spawn('curl.exe', ['-s', '-L', '-m', '10', url], {
+                detached: true,
+                stdio: 'ignore',
+                windowsHide: true
+            });
+            child.unref();
+            console.log(`Successfully spawned detached curl request for ${action} for ${name} at ${timeStr}`);
+        } catch(e) {
+            try {
+                const child2 = spawn('powershell.exe', ['-WindowStyle', 'Hidden', '-Command', `Invoke-RestMethod -Uri '${url}'`], {
+                    detached: true,
+                    stdio: 'ignore',
+                    windowsHide: true
+                });
+                child2.unref();
+                console.log(`Successfully spawned detached powershell for ${action} for ${name} at ${timeStr}`);
+            } catch(e2) {
+                console.error("All detached request methods failed", e2);
+            }
+        }
     } catch(e) {
         console.error("Sync shutdown request failed", e);
     }
@@ -550,8 +564,8 @@ app.whenReady().then(() => {
             console.log("OS shutdown detected via powerMonitor.");
             isOsShutdown = true;
             if (!shutdownHandled && config.name) {
-                console.log("OS shutdown detected, Event Log watcher will handle the offTime transmission.");
-                // Event Log watcher가 정확한 종료 시간을 기록하도록 sendSyncShutdownRequest 생략
+                console.log("OS shutdown detected, sending real-time offTime request immediately.");
+                sendSyncShutdownRequest('recordOff', config.name);
                 shutdownHandled = true;
             }
         });
@@ -612,8 +626,8 @@ app.on('before-quit', (e) => {
                 // 트레이에서 "완전 종료"를 선택한 경우: 앱만 종료하므로 offTime 기록하지 않음
                 console.log("App quitting from tray. Not recording offTime (app-only exit).");
             } else if (isOsShutdown) {
-                // OS 종료가 감지된 경우: Event Log watcher가 전송할 것이므로 여기서는 스킵
-                console.log("App quitting due to OS shutdown. Event Log watcher handles offTime.");
+                // OS 종료가 감지된 경우: 이미 powerMonitor나 session-end에서 실시간 전송됨
+                console.log("App quitting due to OS shutdown. offTime was already sent in real-time.");
             } else {
                 // 앱만 종료되는 경우 (설치 프로그램에 의한 종료 등)
                 // offTime을 기록하지 않음 — 다음 부팅 시 6006 이벤트로 정확한 종료 시간이 기록됨
@@ -633,7 +647,8 @@ app.on('session-end', () => {
     
     const config = getUserConfig();
     if (config.name) {
-        console.log("System session ending (logoff/shutdown/restart). Event Log watcher handles offTime.");
+        console.log("System session ending (logoff/shutdown/restart). Sending real-time offTime request immediately.");
+        sendSyncShutdownRequest('recordOff', config.name);
         shutdownHandled = true;
     }
 });
