@@ -374,7 +374,9 @@ try {
             try {
                 # Start-Process detached to survive PowerShell termination during shutdown
                 Start-Process -WindowStyle Hidden -FilePath "curl.exe" -ArgumentList "-s", "-L", "-m", "10", ('"' + $url + '"')
-            } catch {}
+            } catch {
+                try { Invoke-RestMethod -Uri $url -Method Get -TimeoutSec 10 } catch {}
+            }
         }
     } | Out-Null
     
