@@ -372,11 +372,8 @@ try {
             $logDateParam = [uri]::EscapeDataString($logDate)
             $url = "${GAS_URL}?action=recordOff&name=$nameParam&offTime=$timeParam&logDate=$logDateParam&isDesktop=true&t=$($kstTime.Ticks)"
             try {
-                # Start-Process detached to survive PowerShell termination during shutdown
-                Start-Process -WindowStyle Hidden -FilePath "curl.exe" -ArgumentList "-s", "-L", "-m", "10", ('"' + $url + '"')
-            } catch {
-                try { Invoke-RestMethod -Uri $url -Method Get -TimeoutSec 10 } catch {}
-            }
+                Invoke-RestMethod -Uri $url -Method Get -TimeoutSec 10
+            } catch {}
         }
     } | Out-Null
     
@@ -396,11 +393,14 @@ try {
 `;
     
     shutdownWatcherProcess = spawn('powershell.exe', [
-        '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', psScript
+        '-NoProfile', '-NonInteractive', '-Command', '-'
     ], {
         windowsHide: true,
         stdio: ['pipe', 'pipe', 'pipe']
     });
+    
+    shutdownWatcherProcess.stdin.write(psScript + '\n');
+    shutdownWatcherProcess.stdin.end();
     
     shutdownWatcherProcess.stdout.on('data', async (data) => {
         const lines = data.toString().trim().split('\n');
