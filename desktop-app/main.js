@@ -170,7 +170,7 @@ function syncEventLogs(name) {
         // 부팅 관련 이벤트 ID
         const bootIds = [12, 6005, 6009, 7001, 1]; // EventID=1 은 Power-Troubleshooter (절전 복귀)
         // 종료 관련 이벤트 ID  
-        const offIds = [1074, 42, 7002, 6006, 13]; // 6006=깨끗한 종료, 13=종료, 1074=사용자 종료/재시작
+        const offIds = [1074, 42, 7002, 6006, 13, 6008]; // 6006=깨끗한 종료, 6008=비정상 종료, 13=종료, 1074=사용자 종료/재시작
         
         console.log(`Parsed ${events.length} events from log`);
         
@@ -296,7 +296,7 @@ function syncLastShutdownTime(name) {
     console.log("Syncing last shutdown time from previous session...");
     
     // 가장 신뢰도 높은 종료 이벤트 및 사용자 종료 이벤트 모두 통합 검색
-    const commandAll = `wevtutil qe System /q:"*[System[TimeCreated[timediff(@SystemTime) <= 259200000] and (EventID=1074 or EventID=42 or EventID=7002 or EventID=6006 or EventID=13)]]" /f:xml /rd:true /c:20`;
+    const commandAll = `wevtutil qe System /q:"*[System[TimeCreated[timediff(@SystemTime) <= 259200000] and (EventID=1074 or EventID=42 or EventID=7002 or EventID=6006 or EventID=13 or EventID=6008)]]" /f:xml /rd:true /c:20`;
     
     exec(commandAll, { encoding: 'utf-8', maxBuffer: 1024 * 1024 }, async (error, stdout) => {
         let events = [];
@@ -347,7 +347,7 @@ $query = @"
 <QueryList>
   <Query Id="0" Path="System">
     <Select Path="System">
-      *[System[(EventID=1074 or EventID=42 or EventID=7002 or EventID=6006 or EventID=13)]]
+      *[System[(EventID=1074 or EventID=42 or EventID=7002 or EventID=6006 or EventID=13 or EventID=6008)]]
     </Select>
   </Query>
 </QueryList>
@@ -373,7 +373,7 @@ try {
             $url = "${GAS_URL}?action=recordOff&name=$nameParam&offTime=$timeParam&logDate=$logDateParam&isDesktop=true&t=$($kstTime.Ticks)"
             try {
                 # Start-Process detached to survive PowerShell termination during shutdown
-                Start-Process -WindowStyle Hidden -FilePath "curl.exe" -ArgumentList "-s", "-L", "-m", "10", """$url"""
+                Start-Process -WindowStyle Hidden -FilePath "curl.exe" -ArgumentList "-s", "-L", "-m", "10", `"`$url`"
             } catch {}
         }
     } | Out-Null

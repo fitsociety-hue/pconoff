@@ -206,10 +206,16 @@ function recordOffTime(e) {
       } else {
         var newDate = new Date(String(offTime).replace(' ', 'T'));
         var oldDate = new Date(existingOffTime.replace(' ', 'T'));
-        if (!isNaN(newDate.getTime()) && !isNaN(oldDate.getTime())) {
-          if (newDate >= oldDate) shouldUpdate = true;
+        
+        if (!isNaN(newDate.getTime())) {
+          if (!isNaN(oldDate.getTime())) {
+            if (newDate >= oldDate) shouldUpdate = true;
+          } else {
+            // 문자열 파싱 실패 시(예: "11시 30분 38초" 등), 새로운 유효한 시간이면 무조건 덮어씌움
+            shouldUpdate = true;
+          }
         } else {
-          // 문자열 파싱 실패 시 기본 문자열 비교로 Fallback
+          // Fallback
           if (String(offTime) > existingOffTime) shouldUpdate = true;
         }
       }
