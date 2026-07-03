@@ -17,6 +17,7 @@ let safeToQuit = false;
 let shutdownHandled = false;
 let shutdownWatcherProcess = null;
 let isOsShutdown = false;  // OS 종료/재시작에 의한 종료인지 여부
+let heartbeatInterval = null;  // Heartbeat 타이머 (30초 간격으로 offTime 갱신)
 
 // 사용자 설정 불러오기
 function getUserConfig() {
@@ -521,6 +522,61 @@ function stopShutdownWatcher() {
     }
 }
 
+// ============================================================
+// Heartbeat: 30초마다 현재 시간을 서버에 offTime으로 전송
+// PC가 갑자기 종료되어도 마지막 heartbeat 시간이 종료 시간으로 기록됨
+// (최대 오차: 30초)
+// ============================================================
+function startHeartbeat(name) {
+    if (!name) return;
+    if (heartbeatInterval) {
+        clearInterval(heartbeatInterval);
+        heartbeatInterval = null;
+    }
+    
+    console.log("[Heartbeat] Starting heartbeat (every 30s)...");
+    
+    // 즉시 1회 전송 (앱 시작 직후 offTime 갱신)
+    sendHeartbeat(name);
+    
+    heartbeatInterval = setInterval(() => {
+        sendHeartbeat(name);
+    }, 30000); // 30초
+}
+
+function sendHeartbeat(name) {
+    if (!name || !app.isReady()) return;
+    
+    const timeStr = formatDateTimeNow();
+    const logDate = timeStr.substring(0, 10);
+    const urlString = `${GAS_URL}?action=recordOff&name=${encodeURIComponent(name)}&offTime=${encodeURIComponent(timeStr)}&logDate=${encodeURIComponent(logDate)}&isDesktop=true&t=${Date.now()}`;
+    
+    try {
+        const request = net.request(urlString);
+        request.on('response', (response) => {
+            let data = '';
+            response.on('data', (chunk) => data += chunk);
+            response.on('end', () => {
+                // Heartbeat 성공 (로그 최소화 - 30초마다 발생하므로)
+            });
+        });
+        request.on('error', (err) => {
+            // Heartbeat 실패는 무시 (다음 30초 후 재시도)
+        });
+        request.end();
+    } catch(e) {
+        // 무시
+    }
+}
+
+function stopHeartbeat() {
+    if (heartbeatInterval) {
+        clearInterval(heartbeatInterval);
+        heartbeatInterval = null;
+        console.log("[Heartbeat] Stopped.");
+    }
+}
+
 function createTray() {
     tray = new Tray(path.join(__dirname, 'icon.png'));
     const contextMenu = Menu.buildFromTemplate([
@@ -599,7 +655,10 @@ app.whenReady().then(() => {
         // 3. 실시간 종료 이벤트 감시 시작
         startShutdownWatcher(config.name);
         
-        // 4. 1분마다 정기 동기화 수행 (6006 이벤트 실시간 반영)
+        // 4. Heartbeat 시작 (30초마다 offTime 갱신 - 실시간 종료 시간 반영 핵심)
+        startHeartbeat(config.name);
+        
+        // 5. 1분마다 정기 동기화 수행 (6006 이벤트 실시간 반영)
         setInterval(() => {
             syncEventLogs(config.name);
         }, 60000);
@@ -616,6 +675,8 @@ app.whenReady().then(() => {
             setTimeout(() => syncEventLogs(config.name), 2000);
             // watcher가 죽었을 수 있으므로 재시작
             startShutdownWatcher(config.name);
+            // heartbeat 재시작
+            startHeartbeat(config.name);
         });
 
         // OS 종료/재시작 감지 (Electron의 shutdown 이벤트)
@@ -715,7 +776,8 @@ function startOvertimeCheck() {
 app.on('before-quit', (e) => {
     safeToQuit = true;
     
-    // watcher 프로세스 정리
+    // heartbeat 및 watcher 프로세스 정리
+    stopHeartbeat();
     stopShutdownWatcher();
     
     if (!shutdownHandled) {
@@ -767,6 +829,7 @@ ipcMain.on('save-config', (event, newName) => {
     if (isFirstTime && newName) {
         syncEventLogs(newName);
         startShutdownWatcher(newName);
+        startHeartbeat(newName);
     }
     
     mainWindow.hide();
