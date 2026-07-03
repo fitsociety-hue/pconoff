@@ -3,6 +3,9 @@ const path = require('path');
 const fs = require('fs');
 const { exec, spawn } = require('child_process');
 
+// 로컬 종료 시간 캐시 파일 경로 (서버 전송 실패 시 다음 부팅 때 재전송용)
+const SHUTDOWN_CACHE_PATH = path.join(app.getPath('userData'), 'shutdown_cache.json');
+
 const CONFIG_PATH = path.join(app.getPath('userData'), 'user_config.json');
 const GAS_URL = "https://script.google.com/macros/s/AKfycbxkvV93g2ssO6GoeUCunv4HgyIqRMbfRHfcYllaCdXhFT0-B-XmBwiqbUvIObabZm8/exec";
 
@@ -85,7 +88,39 @@ function sendSyncRequest(action, name, timeStr = null, logDate = null) {
     });
 }
 
+// 로컬 캐시에 종료 시간 저장 (서버 전송 실패 대비)
+function saveShutdownCache(name, timeStr, logDate) {
+    try {
+        const cache = { name, timeStr, logDate, timestamp: Date.now() };
+        fs.writeFileSync(SHUTDOWN_CACHE_PATH, JSON.stringify(cache));
+        console.log(`[Cache] Saved shutdown time to local cache: ${timeStr}`);
+    } catch(e) {
+        console.error("[Cache] Failed to save shutdown cache:", e);
+    }
+}
+
+// 부팅 시 캐시된 종료 시간이 있으면 서버로 재전송
+function retryCachedShutdown(name) {
+    try {
+        if (!fs.existsSync(SHUTDOWN_CACHE_PATH)) return;
+        const cache = JSON.parse(fs.readFileSync(SHUTDOWN_CACHE_PATH, 'utf-8'));
+        if (cache && cache.timeStr && cache.name) {
+            console.log(`[Cache] Found cached shutdown time: ${cache.timeStr} for ${cache.name}, retrying...`);
+            sendSyncRequest('recordOff', cache.name, cache.timeStr, cache.logDate).then(() => {
+                // 전송 성공 후 캐시 삭제
+                try { fs.unlinkSync(SHUTDOWN_CACHE_PATH); } catch(e) {}
+                console.log(`[Cache] Successfully sent cached shutdown time and cleared cache.`);
+            }).catch(err => {
+                console.error("[Cache] Failed to retry cached shutdown:", err);
+            });
+        }
+    } catch(e) {
+        console.error("[Cache] Error reading shutdown cache:", e);
+    }
+}
+
 // OS 강제 종료/절전 등 비동기 응답을 기다릴 수 없는 경우를 대비한 동기식 HTTP 요청
+// 개선: curl과 powershell을 동시에 실행하여 어느 한 쪽이라도 성공하도록 보장
 function sendSyncShutdownRequest(action, name) {
     if (!name) return;
     try {
@@ -93,30 +128,41 @@ function sendSyncShutdownRequest(action, name) {
         let timeStr = formatDateTimeNow();
         const logDate = timeStr.substring(0, 10);
         
+        // 로컬 캐시에 저장 (서버 전송 실패 대비 백업)
+        if (action === 'recordOff') {
+            saveShutdownCache(name, timeStr, logDate);
+        }
+        
         const timeParam = action === 'recordBoot' ? `bootTime=${encodeURIComponent(timeStr)}` : `offTime=${encodeURIComponent(timeStr)}`;
         const url = `${GAS_URL}?action=${action}&name=${encodeURIComponent(name)}&${timeParam}&logDate=${encodeURIComponent(logDate)}&isDesktop=true&t=${Date.now()}`;
         
+        // 방법 1: detached curl.exe (가장 빠름)
         try {
-            // 비동기 detached curl을 사용하여 OS 강제 종료 시 Node 프로세스 블로킹 방지 및 프로세스 생존 유도
-            const child = spawn('curl.exe', ['-s', '-L', '-m', '10', url], {
+            const child = spawn('curl.exe', ['-s', '-L', '-m', '5', url], {
                 detached: true,
                 stdio: 'ignore',
                 windowsHide: true
             });
             child.unref();
-            console.log(`Successfully spawned detached curl request for ${action} for ${name} at ${timeStr}`);
+            console.log(`[Shutdown] Spawned detached curl for ${action} at ${timeStr}`);
         } catch(e) {
-            try {
-                const child2 = spawn('powershell.exe', ['-WindowStyle', 'Hidden', '-Command', `Invoke-RestMethod -Uri '${url}'`], {
-                    detached: true,
-                    stdio: 'ignore',
-                    windowsHide: true
-                });
-                child2.unref();
-                console.log(`Successfully spawned detached powershell for ${action} for ${name} at ${timeStr}`);
-            } catch(e2) {
-                console.error("All detached request methods failed", e2);
-            }
+            console.error("[Shutdown] curl.exe spawn failed:", e.message);
+        }
+        
+        // 방법 2: detached powershell (curl 실패 대비 동시 실행)
+        try {
+            const child2 = spawn('powershell.exe', [
+                '-NoProfile', '-WindowStyle', 'Hidden', '-Command',
+                `try { Invoke-RestMethod -Uri '${url}' -TimeoutSec 5 } catch {}`
+            ], {
+                detached: true,
+                stdio: 'ignore',
+                windowsHide: true
+            });
+            child2.unref();
+            console.log(`[Shutdown] Spawned detached powershell for ${action} at ${timeStr}`);
+        } catch(e2) {
+            console.error("[Shutdown] powershell spawn failed:", e2.message);
         }
     } catch(e) {
         console.error("Sync shutdown request failed", e);
@@ -367,18 +413,21 @@ try {
             [Console]::Out.Flush()
             
             # PowerShell에서 직접 서버로 HTTP 요청 전송 (Node.js 종료 시 대비)
+            # 개선: curl과 Invoke-RestMethod를 동시에 실행하여 전송 성공률 극대화
             $nameParam = [uri]::EscapeDataString("${name}")
             $timeParam = [uri]::EscapeDataString($formatted)
             $logDateParam = [uri]::EscapeDataString($logDate)
             $url = "${GAS_URL}?action=recordOff&name=$nameParam&offTime=$timeParam&logDate=$logDateParam&isDesktop=true&t=$($kstTime.Ticks)"
+            
+            # 방법 1: detached curl.exe (가장 빠름 - OS 종료 시에도 생존 가능)
             try {
-                # Use detached curl.exe for extremely fast and non-blocking request to survive OS shutdown
-                Start-Process -FilePath "curl.exe" -ArgumentList @("-s", "-L", "-m", "10", $url) -WindowStyle Hidden
-            } catch {
-                try {
-                    Invoke-RestMethod -Uri $url -Method Get -TimeoutSec 10
-                } catch {}
-            }
+                Start-Process -FilePath "curl.exe" -ArgumentList @("-s", "-L", "-m", "5", $url) -WindowStyle Hidden
+            } catch {}
+            
+            # 방법 2: Invoke-RestMethod (curl 실패 시 대비 - 동시 실행)
+            try {
+                Start-Process -FilePath "powershell.exe" -ArgumentList @("-NoProfile", "-WindowStyle", "Hidden", "-Command", "try { Invoke-RestMethod -Uri '$url' -TimeoutSec 5 } catch {}") -WindowStyle Hidden
+            } catch {}
         }
     } | Out-Null
     
@@ -536,6 +585,9 @@ app.whenReady().then(() => {
     } else {
         console.log("Starting event log sync on boot...");
         
+        // 0. 로컬 캐시된 종료 시간 재전송 시도 (서버 전송 실패 복구)
+        retryCachedShutdown(config.name);
+        
         // 1. 과거 미전송 종료 시간 역추적 (부팅 직후)
         syncLastShutdownTime(config.name);
         
@@ -580,6 +632,46 @@ app.whenReady().then(() => {
     
     // 시간외근무 체크 타이머 시작
     startOvertimeCheck();
+});
+
+// ============================================================
+// 4층 방어: process 레벨 종료 이벤트 감지
+// Windows의 SetConsoleCtrlHandler에 해당하는 Node.js 이벤트
+// ============================================================
+process.on('SIGTERM', () => {
+    console.log('[Process] SIGTERM received.');
+    if (!shutdownHandled) {
+        const config = getUserConfig();
+        if (config.name) {
+            sendSyncShutdownRequest('recordOff', config.name);
+            shutdownHandled = true;
+        }
+    }
+});
+
+process.on('SIGINT', () => {
+    console.log('[Process] SIGINT received.');
+    if (!shutdownHandled) {
+        const config = getUserConfig();
+        if (config.name) {
+            sendSyncShutdownRequest('recordOff', config.name);
+            shutdownHandled = true;
+        }
+    }
+});
+
+// Windows 전용: 콘솔 윈도우가 닫힐 때 이벤트
+process.on('exit', () => {
+    console.log('[Process] Process exiting.');
+    // exit 이벤트에서는 비동기 작업 불가하므로 캐시만 저장
+    if (!shutdownHandled) {
+        const config = getUserConfig();
+        if (config.name) {
+            const timeStr = formatDateTimeNow();
+            const logDate = timeStr.substring(0, 10);
+            saveShutdownCache(config.name, timeStr, logDate);
+        }
+    }
 });
 
 let overtimeCheckedToday = false;

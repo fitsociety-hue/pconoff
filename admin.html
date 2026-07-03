@@ -286,9 +286,21 @@
                 const formatTime = (timeStr) => {
                     if (!timeStr || timeStr === '-') return '-';
                     try {
+                        // 직접 문자열에서 시:분:초 추출 시도 (가장 정확)
+                        const timeMatch = String(timeStr).match(/(\d{1,2}):(\d{2}):(\d{2})/);
+                        if (timeMatch) {
+                            const h = parseInt(timeMatch[1], 10);
+                            const m = parseInt(timeMatch[2], 10);
+                            const s = parseInt(timeMatch[3], 10);
+                            return `${h}시 ${m.toString().padStart(2,'0')}분 ${s.toString().padStart(2,'0')}초`;
+                        }
+                        // Date 객체 파싱 시도 (fallback)
                         const d = new Date(timeStr);
                         if (isNaN(d.getTime())) return timeStr;
-                        return d.toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul', hour12: false });
+                        const hours = d.getHours();
+                        const mins = d.getMinutes().toString().padStart(2, '0');
+                        const secs = d.getSeconds().toString().padStart(2, '0');
+                        return `${hours}시 ${mins}분 ${secs}초`;
                     } catch(e) { return timeStr; }
                 };
                 

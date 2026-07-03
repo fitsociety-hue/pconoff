@@ -168,7 +168,9 @@ function recordBootTime(e) {
     if (rowDateStr == dateStr && data[i][1] == name) {
       if (e.parameter.isDesktop === 'true') {
         // 데스크탑 앱에서 전송된 시스템 부팅 시간인 경우 덮어씌움
-        sheet.getRange(i + 1, 3).setValue(bootTime);
+        var bootCell = sheet.getRange(i + 1, 3);
+        bootCell.setNumberFormat('@');
+        bootCell.setValue(bootTime);
         return ContentService.createTextOutput(JSON.stringify({"status": "success", "message": "데스크탑 부팅 시간으로 업데이트 완료"})).setMimeType(ContentService.MimeType.JSON);
       }
       // 이미 부팅 기록이 있다면 업데이트하지 않고 기존 유지
@@ -177,6 +179,9 @@ function recordBootTime(e) {
   }
   
   sheet.appendRow([dateStr, name, bootTime, "", "No"]);
+  var newRow = sheet.getLastRow();
+  sheet.getRange(newRow, 3).setNumberFormat('@');
+  sheet.getRange(newRow, 4).setNumberFormat('@');
   return ContentService.createTextOutput(JSON.stringify({"status": "success", "message": "부팅 시간 기록 완료"})).setMimeType(ContentService.MimeType.JSON);
 }
 
@@ -221,7 +226,10 @@ function recordOffTime(e) {
       }
       
       if (shouldUpdate) {
-        sheet.getRange(i + 1, 4).setValue(offTime);
+        // 문자열 형식으로 강제 저장하여 구글 스프레드시트가 Date 객체로 자동 변환하여 초 단위를 잃어버리는 문제 방지
+        var offCell = sheet.getRange(i + 1, 4);
+        offCell.setNumberFormat('@');
+        offCell.setValue(offTime);
       }
       return ContentService.createTextOutput(JSON.stringify({"status": "success", "message": "종료 시간 기록 완료"})).setMimeType(ContentService.MimeType.JSON);
     }
@@ -229,19 +237,42 @@ function recordOffTime(e) {
   
   // 오늘자 부팅 기록이 없을 경우, 퇴근 기록이라도 남기기 위해 새 행 추가
   sheet.appendRow([dateStr, name, "-", offTime, "No"]);
+  // 새 행도 문자열 형식으로 강제 설정
+  var newRow = sheet.getLastRow();
+  sheet.getRange(newRow, 3).setNumberFormat('@');
+  sheet.getRange(newRow, 4).setNumberFormat('@');
   return ContentService.createTextOutput(JSON.stringify({"status": "success", "message": "부팅 기록 없이 종료 시간 기록 완료"})).setMimeType(ContentService.MimeType.JSON);
 }
 function getStats(e) {
   var logSheet = getSheet("Logs");
   var logData = logSheet.getDataRange().getValues();
   var logs = [];
+  var tz = Session.getScriptTimeZone();
   
   for (var i = 1; i < logData.length; i++) {
+    // 날짜 포맷팅: Date 객체인 경우 명시적으로 yyyy-MM-dd 형식으로 변환
+    var dateVal = logData[i][0];
+    if (dateVal instanceof Date) {
+      dateVal = Utilities.formatDate(dateVal, tz, "yyyy-MM-dd");
+    }
+    
+    // bootTime 포맷팅: Date 객체인 경우 초 단위까지 포함하여 문자열로 변환
+    var bootTimeVal = logData[i][2];
+    if (bootTimeVal instanceof Date) {
+      bootTimeVal = Utilities.formatDate(bootTimeVal, tz, "yyyy-MM-dd HH:mm:ss");
+    }
+    
+    // offTime 포맷팅: Date 객체인 경우 초 단위까지 포함하여 문자열로 변환
+    var offTimeVal = logData[i][3];
+    if (offTimeVal instanceof Date) {
+      offTimeVal = Utilities.formatDate(offTimeVal, tz, "yyyy-MM-dd HH:mm:ss");
+    }
+    
     logs.push({
-      "date": logData[i][0],
+      "date": dateVal,
       "name": logData[i][1],
-      "bootTime": logData[i][2],
-      "offTime": logData[i][3],
+      "bootTime": bootTimeVal,
+      "offTime": offTimeVal,
       "overtime": logData[i][4]
     });
   }
