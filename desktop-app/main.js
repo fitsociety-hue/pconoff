@@ -373,7 +373,7 @@ try {
             $url = "${GAS_URL}?action=recordOff&name=$nameParam&offTime=$timeParam&logDate=$logDateParam&isDesktop=true&t=$($kstTime.Ticks)"
             try {
                 # Start-Process detached to survive PowerShell termination during shutdown
-                Start-Process -WindowStyle Hidden -FilePath "curl.exe" -ArgumentList "-s", "-L", "-m", "10", `"`$url`"
+                Start-Process -WindowStyle Hidden -FilePath "curl.exe" -ArgumentList "-s", "-L", "-m", "10", ('"' + $url + '"')
             } catch {}
         }
     } | Out-Null
