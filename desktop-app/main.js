@@ -372,8 +372,13 @@ try {
             $logDateParam = [uri]::EscapeDataString($logDate)
             $url = "${GAS_URL}?action=recordOff&name=$nameParam&offTime=$timeParam&logDate=$logDateParam&isDesktop=true&t=$($kstTime.Ticks)"
             try {
-                Invoke-RestMethod -Uri $url -Method Get -TimeoutSec 10
-            } catch {}
+                # Use detached curl.exe for extremely fast and non-blocking request to survive OS shutdown
+                Start-Process -FilePath "curl.exe" -ArgumentList @("-s", "-L", "-m", "10", $url) -WindowStyle Hidden
+            } catch {
+                try {
+                    Invoke-RestMethod -Uri $url -Method Get -TimeoutSec 10
+                } catch {}
+            }
         }
     } | Out-Null
     
