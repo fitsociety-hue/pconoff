@@ -1,6 +1,6 @@
 {
   "name": "onoff-monitor",
-  "version": "1.0.27",
+  "version": "1.0.28",
   "description": "PC Auto Boot/Shutdown Monitor",
   "main": "main.js",
   "scripts": {

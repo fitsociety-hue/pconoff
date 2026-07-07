@@ -46,11 +46,15 @@ function doGet(e) {
   return ContentService.createTextOutput(JSON.stringify({"status": "error", "message": "Unknown action"})).setMimeType(ContentService.MimeType.JSON);
 }
 
+var cachedDoc = null;
+
 function getSheet(sheetName) {
-  var doc = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = doc.getSheetByName(sheetName);
+  if (!cachedDoc) {
+    cachedDoc = SpreadsheetApp.getActiveSpreadsheet();
+  }
+  var sheet = cachedDoc.getSheetByName(sheetName);
   if (!sheet) {
-    sheet = doc.insertSheet(sheetName);
+    sheet = cachedDoc.insertSheet(sheetName);
     if (sheetName === "Users") {
       sheet.appendRow(["Team", "Name", "Role", "Password", "IsAdmin", "Status"]);
       // 기본 관리자 추가 (비밀번호: 2026의 SHA-256 해시값 필요)
@@ -75,16 +79,16 @@ function initSheets() {
 }
 
 function registerUser(e) {
-  var team = e.parameter.team;
-  var name = e.parameter.name;
-  var role = e.parameter.role;
+  var team = String(e.parameter.team).trim();
+  var name = String(e.parameter.name).trim();
+  var role = String(e.parameter.role).trim();
   var passwordHash = e.parameter.password; // 프론트에서 해시된 문자열
   
   var sheet = getSheet("Users");
   var data = sheet.getDataRange().getValues();
   
   for (var i = 1; i < data.length; i++) {
-    if (data[i][1] == name) {
+    if (String(data[i][1]).trim() === name) {
       return ContentService.createTextOutput(JSON.stringify({"status": "error", "message": "이미 존재하는 이름입니다."})).setMimeType(ContentService.MimeType.JSON);
     }
   }
@@ -94,28 +98,32 @@ function registerUser(e) {
 }
 
 function loginUser(e) {
-  var name = e.parameter.name;
+  var name = String(e.parameter.name || "").trim();
   var passwordHash = e.parameter.password;
   
   var sheet = getSheet("Users");
   var data = sheet.getDataRange().getValues();
   
   for (var i = 1; i < data.length; i++) {
-    if (data[i][1] == name && data[i][3] == passwordHash) {
-      return ContentService.createTextOutput(JSON.stringify({"status": "success", "user": {"team": data[i][0], "name": data[i][1], "role": data[i][2]}})).setMimeType(ContentService.MimeType.JSON);
+    if (String(data[i][1]).trim() === name && data[i][3] === passwordHash) {
+      // 상태가 퇴사인지 확인
+      if (data[i][5] === "퇴사") {
+         return ContentService.createTextOutput(JSON.stringify({"status": "error", "message": "퇴사 처리된 계정입니다."})).setMimeType(ContentService.MimeType.JSON);
+      }
+      return ContentService.createTextOutput(JSON.stringify({"status": "success", "user": {"team": data[i][0], "name": String(data[i][1]).trim(), "role": data[i][2]}})).setMimeType(ContentService.MimeType.JSON);
     }
   }
   return ContentService.createTextOutput(JSON.stringify({"status": "error", "message": "이름 또는 비밀번호가 일치하지 않습니다."})).setMimeType(ContentService.MimeType.JSON);
 }
 
 function adminLogin(e) {
-  var adminId = e.parameter.adminId;
+  var adminId = String(e.parameter.adminId || "").trim();
   var passwordHash = e.parameter.password;
   
   var sheet = getSheet("AdminSettings");
   var data = sheet.getDataRange().getValues();
   
-  var storedHash = data[1][1];
+  var storedHash = data.length > 1 ? String(data[1][1]).trim() : "";
   
   // 기존 초기 비밀번호(1107)에서 2026으로 변경 자동 적용 (구버전 해시값 자동 마이그레이션)
   var oldHash1 = "e111a8818c6426372ce661a34bd3c60fcbb6eb6f157fdf3173323cdd224a1803";

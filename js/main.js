@@ -51,8 +51,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         const loginBtn = document.getElementById('loginBtn');
         if (loginBtn) {
             loginBtn.addEventListener('click', async () => {
-                const name = document.getElementById('name').value;
-                const password = document.getElementById('password').value;
+                const name = document.getElementById('name').value.trim();
+                const password = document.getElementById('password').value.trim();
                 
                 if (!name || !password) {
                     alert('이름과 비밀번호를 입력해주세요.');

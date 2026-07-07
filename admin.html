@@ -191,7 +191,7 @@
             }
 
             document.getElementById('adminLoginBtn').addEventListener('click', async () => {
-                const pwd = document.getElementById('adminPassword').value;
+                const pwd = document.getElementById('adminPassword').value.trim();
                 if(!pwd) return alert('비밀번호를 입력하세요.');
                 
                 const loginBtn = document.getElementById('adminLoginBtn');
