@@ -739,6 +739,8 @@ function startOvertimeCheck() {
     }, 60000);
 }
 
+let isDelayingQuit = false;
+
 // 앱 완전 종료 전 처리
 app.on('before-quit', (e) => {
     safeToQuit = true;
@@ -765,19 +767,40 @@ app.on('before-quit', (e) => {
             shutdownHandled = true;
         }
     }
+    
+    if (isOsShutdown && !isDelayingQuit) {
+        e.preventDefault();
+        isDelayingQuit = true;
+        console.log("Delaying before-quit by 2 seconds to allow HTTP requests to complete.");
+        setTimeout(() => {
+            app.quit();
+        }, 2000);
+    }
 });
 
-app.on('session-end', () => {
+app.on('session-end', (e) => {
     // OS 세션 종료 시 (로그오프, 종료, 재시작) — OS 종료 플래그 설정 및 offTime 기록
     isOsShutdown = true;
     
-    if (shutdownHandled) return;
+    // Windows에서 앱 종료를 지연시켜 curl/powershell 백그라운드 전송이 완료될 시간을 확보 (최대 2초)
+    if (e) e.preventDefault();
+    
+    if (shutdownHandled) {
+        setTimeout(() => { app.quit(); }, 2000);
+        return;
+    }
     
     const config = getUserConfig();
     if (config.name) {
-        console.log("System session ending (logoff/shutdown/restart). Sending real-time offTime request immediately.");
+        console.log("System session ending (logoff/shutdown/restart). Delaying quit by 2 seconds to ensure HTTP requests complete.");
         sendSyncShutdownRequest('recordOff', config.name);
         shutdownHandled = true;
+        
+        setTimeout(() => {
+            app.quit();
+        }, 2000);
+    } else {
+        app.quit();
     }
 });
 

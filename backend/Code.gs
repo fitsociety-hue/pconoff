@@ -154,94 +154,106 @@ function getTodayString() {
 }
 
 function recordBootTime(e) {
-  var name = e.parameter.name;
-  var bootTime = e.parameter.bootTime; // 클라이언트에서 보낸 타임스탬프 또는 부팅시간 문자열
-  var logDate = e.parameter.logDate;
-  var dateStr = logDate ? logDate : getTodayString();
-  
-  var sheet = getSheet("Logs");
-  var data = sheet.getDataRange().getValues();
-  
-  // 이미 오늘자 기록이 있는지 확인
-  for (var i = 1; i < data.length; i++) {
-    var rowDateStr = data[i][0] instanceof Date ? Utilities.formatDate(data[i][0], Session.getScriptTimeZone(), "yyyy-MM-dd") : String(data[i][0]).substring(0, 10);
-    if (rowDateStr == dateStr && data[i][1] == name) {
-      if (e.parameter.isDesktop === 'true') {
-        // 데스크탑 앱에서 전송된 시스템 부팅 시간인 경우 덮어씌움
-        var bootCell = sheet.getRange(i + 1, 3);
-        bootCell.setNumberFormat('@');
-        bootCell.setValue(bootTime);
-        return ContentService.createTextOutput(JSON.stringify({"status": "success", "message": "데스크탑 부팅 시간으로 업데이트 완료"})).setMimeType(ContentService.MimeType.JSON);
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000); // Wait up to 10 seconds
+  try {
+    var name = e.parameter.name;
+    var bootTime = e.parameter.bootTime; // 클라이언트에서 보낸 타임스탬프 또는 부팅시간 문자열
+    var logDate = e.parameter.logDate;
+    var dateStr = logDate ? logDate : getTodayString();
+    
+    var sheet = getSheet("Logs");
+    var data = sheet.getDataRange().getValues();
+    
+    // 이미 오늘자 기록이 있는지 확인
+    for (var i = 1; i < data.length; i++) {
+      var rowDateStr = data[i][0] instanceof Date ? Utilities.formatDate(data[i][0], Session.getScriptTimeZone(), "yyyy-MM-dd") : String(data[i][0]).substring(0, 10);
+      if (rowDateStr == dateStr && data[i][1] == name) {
+        if (e.parameter.isDesktop === 'true') {
+          // 데스크탑 앱에서 전송된 시스템 부팅 시간인 경우 덮어씌움
+          var bootCell = sheet.getRange(i + 1, 3);
+          bootCell.setNumberFormat('@');
+          bootCell.setValue(bootTime);
+          return ContentService.createTextOutput(JSON.stringify({"status": "success", "message": "데스크탑 부팅 시간으로 업데이트 완료"})).setMimeType(ContentService.MimeType.JSON);
+        }
+        // 이미 부팅 기록이 있다면 업데이트하지 않고 기존 유지
+        return ContentService.createTextOutput(JSON.stringify({"status": "success", "message": "이미 오늘 부팅 기록이 존재합니다."})).setMimeType(ContentService.MimeType.JSON);
       }
-      // 이미 부팅 기록이 있다면 업데이트하지 않고 기존 유지
-      return ContentService.createTextOutput(JSON.stringify({"status": "success", "message": "이미 오늘 부팅 기록이 존재합니다."})).setMimeType(ContentService.MimeType.JSON);
     }
+    
+    sheet.appendRow([dateStr, name, bootTime, "", "No"]);
+    var newRow = sheet.getLastRow();
+    sheet.getRange(newRow, 3).setNumberFormat('@');
+    sheet.getRange(newRow, 4).setNumberFormat('@');
+    return ContentService.createTextOutput(JSON.stringify({"status": "success", "message": "부팅 시간 기록 완료"})).setMimeType(ContentService.MimeType.JSON);
+  } finally {
+    lock.releaseLock();
   }
-  
-  sheet.appendRow([dateStr, name, bootTime, "", "No"]);
-  var newRow = sheet.getLastRow();
-  sheet.getRange(newRow, 3).setNumberFormat('@');
-  sheet.getRange(newRow, 4).setNumberFormat('@');
-  return ContentService.createTextOutput(JSON.stringify({"status": "success", "message": "부팅 시간 기록 완료"})).setMimeType(ContentService.MimeType.JSON);
 }
 
 function recordOffTime(e) {
-  var name = e.parameter.name;
-  var offTime = e.parameter.offTime;
-  var logDate = e.parameter.logDate;
-  var dateStr = logDate ? logDate : getTodayString();
-  
-  var sheet = getSheet("Logs");
-  var data = sheet.getDataRange().getValues();
-  
-  for (var i = data.length - 1; i >= 1; i--) {
-    var rowDateStr = data[i][0] instanceof Date ? Utilities.formatDate(data[i][0], Session.getScriptTimeZone(), "yyyy-MM-dd") : String(data[i][0]).substring(0, 10);
-    if (rowDateStr == dateStr && data[i][1] == name) {
-      var existingOffTimeValue = sheet.getRange(i + 1, 4).getValue();
-      var existingOffTime = "";
-      if (existingOffTimeValue instanceof Date) {
-        existingOffTime = Utilities.formatDate(existingOffTimeValue, Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss");
-      } else {
-        existingOffTime = String(existingOffTimeValue);
-      }
-      
-      var shouldUpdate = false;
-      if (existingOffTime == "" || existingOffTime == "-") {
-        shouldUpdate = true;
-      } else {
-        var newDate = new Date(String(offTime).replace(' ', 'T'));
-        var oldDate = new Date(existingOffTime.replace(' ', 'T'));
-        
-        if (!isNaN(newDate.getTime())) {
-          if (!isNaN(oldDate.getTime())) {
-            if (newDate >= oldDate) shouldUpdate = true;
-          } else {
-            // 문자열 파싱 실패 시(예: "11시 30분 38초" 등), 새로운 유효한 시간이면 무조건 덮어씌움
-            shouldUpdate = true;
-          }
+  var lock = LockService.getScriptLock();
+  lock.waitLock(10000); // Wait up to 10 seconds for other processes to finish
+  try {
+    var name = e.parameter.name;
+    var offTime = e.parameter.offTime;
+    var logDate = e.parameter.logDate;
+    var dateStr = logDate ? logDate : getTodayString();
+    
+    var sheet = getSheet("Logs");
+    var data = sheet.getDataRange().getValues();
+    
+    for (var i = data.length - 1; i >= 1; i--) {
+      var rowDateStr = data[i][0] instanceof Date ? Utilities.formatDate(data[i][0], Session.getScriptTimeZone(), "yyyy-MM-dd") : String(data[i][0]).substring(0, 10);
+      if (rowDateStr == dateStr && data[i][1] == name) {
+        var existingOffTimeValue = sheet.getRange(i + 1, 4).getValue();
+        var existingOffTime = "";
+        if (existingOffTimeValue instanceof Date) {
+          existingOffTime = Utilities.formatDate(existingOffTimeValue, Session.getScriptTimeZone(), "yyyy-MM-dd HH:mm:ss");
         } else {
-          // Fallback
-          if (String(offTime) > existingOffTime) shouldUpdate = true;
+          existingOffTime = String(existingOffTimeValue);
         }
+        
+        var shouldUpdate = false;
+        if (existingOffTime == "" || existingOffTime == "-") {
+          shouldUpdate = true;
+        } else {
+          var newDate = new Date(String(offTime).replace(' ', 'T'));
+          var oldDate = new Date(existingOffTime.replace(' ', 'T'));
+          
+          if (!isNaN(newDate.getTime())) {
+            if (!isNaN(oldDate.getTime())) {
+              if (newDate >= oldDate) shouldUpdate = true;
+            } else {
+              // 문자열 파싱 실패 시(예: "11시 30분 38초" 등), 새로운 유효한 시간이면 무조건 덮어씌움
+              shouldUpdate = true;
+            }
+          } else {
+            // Fallback
+            if (String(offTime) > existingOffTime) shouldUpdate = true;
+          }
+        }
+        
+        if (shouldUpdate) {
+          // 문자열 형식으로 강제 저장하여 구글 스프레드시트가 Date 객체로 자동 변환하여 초 단위를 잃어버리는 문제 방지
+          var offCell = sheet.getRange(i + 1, 4);
+          offCell.setNumberFormat('@');
+          offCell.setValue(offTime);
+        }
+        return ContentService.createTextOutput(JSON.stringify({"status": "success", "message": "종료 시간 기록 완료"})).setMimeType(ContentService.MimeType.JSON);
       }
-      
-      if (shouldUpdate) {
-        // 문자열 형식으로 강제 저장하여 구글 스프레드시트가 Date 객체로 자동 변환하여 초 단위를 잃어버리는 문제 방지
-        var offCell = sheet.getRange(i + 1, 4);
-        offCell.setNumberFormat('@');
-        offCell.setValue(offTime);
-      }
-      return ContentService.createTextOutput(JSON.stringify({"status": "success", "message": "종료 시간 기록 완료"})).setMimeType(ContentService.MimeType.JSON);
     }
+    
+    // 오늘자 부팅 기록이 없을 경우, 퇴근 기록이라도 남기기 위해 새 행 추가
+    sheet.appendRow([dateStr, name, "-", offTime, "No"]);
+    // 새 행도 문자열 형식으로 강제 설정
+    var newRow = sheet.getLastRow();
+    sheet.getRange(newRow, 3).setNumberFormat('@');
+    sheet.getRange(newRow, 4).setNumberFormat('@');
+    return ContentService.createTextOutput(JSON.stringify({"status": "success", "message": "부팅 기록 없이 종료 시간 기록 완료"})).setMimeType(ContentService.MimeType.JSON);
+  } finally {
+    lock.releaseLock();
   }
-  
-  // 오늘자 부팅 기록이 없을 경우, 퇴근 기록이라도 남기기 위해 새 행 추가
-  sheet.appendRow([dateStr, name, "-", offTime, "No"]);
-  // 새 행도 문자열 형식으로 강제 설정
-  var newRow = sheet.getLastRow();
-  sheet.getRange(newRow, 3).setNumberFormat('@');
-  sheet.getRange(newRow, 4).setNumberFormat('@');
-  return ContentService.createTextOutput(JSON.stringify({"status": "success", "message": "부팅 기록 없이 종료 시간 기록 완료"})).setMimeType(ContentService.MimeType.JSON);
 }
 function getStats(e) {
   var logSheet = getSheet("Logs");
