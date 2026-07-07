@@ -528,52 +528,19 @@ function stopShutdownWatcher() {
 // (최대 오차: 30초)
 // ============================================================
 function startHeartbeat(name) {
-    if (!name) return;
-    if (heartbeatInterval) {
-        clearInterval(heartbeatInterval);
-        heartbeatInterval = null;
-    }
-    
-    console.log("[Heartbeat] Starting heartbeat (every 30s)...");
-    
-    // 즉시 1회 전송 (앱 시작 직후 offTime 갱신)
-    sendHeartbeat(name);
-    
-    heartbeatInterval = setInterval(() => {
-        sendHeartbeat(name);
-    }, 30000); // 30초
+    // 사용자 혼란(로그인 시 퇴근시간 갱신되는 것처럼 보임)으로 인해 기능 완전 비활성화
+    return;
 }
 
 function sendHeartbeat(name) {
-    if (!name || !app.isReady()) return;
-    
-    const timeStr = formatDateTimeNow();
-    const logDate = timeStr.substring(0, 10);
-    const urlString = `${GAS_URL}?action=recordOff&name=${encodeURIComponent(name)}&offTime=${encodeURIComponent(timeStr)}&logDate=${encodeURIComponent(logDate)}&isDesktop=true&t=${Date.now()}`;
-    
-    try {
-        const request = net.request(urlString);
-        request.on('response', (response) => {
-            let data = '';
-            response.on('data', (chunk) => data += chunk);
-            response.on('end', () => {
-                // Heartbeat 성공 (로그 최소화 - 30초마다 발생하므로)
-            });
-        });
-        request.on('error', (err) => {
-            // Heartbeat 실패는 무시 (다음 30초 후 재시도)
-        });
-        request.end();
-    } catch(e) {
-        // 무시
-    }
+    // 기능 비활성화
+    return;
 }
 
 function stopHeartbeat() {
     if (heartbeatInterval) {
         clearInterval(heartbeatInterval);
         heartbeatInterval = null;
-        console.log("[Heartbeat] Stopped.");
     }
 }
 
