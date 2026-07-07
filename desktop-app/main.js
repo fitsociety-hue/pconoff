@@ -7,7 +7,7 @@ const { exec, spawn } = require('child_process');
 const SHUTDOWN_CACHE_PATH = path.join(app.getPath('userData'), 'shutdown_cache.json');
 
 const CONFIG_PATH = path.join(app.getPath('userData'), 'user_config.json');
-const GAS_URL = "https://script.google.com/macros/s/AKfycbytKbH2tZE7h9HANBqCA_J9ffKLVRKp3eBm9IFdjYqvcVLKsaKVNwKCIDmXXBUbUriF/exec";
+const GAS_URL = "https://script.google.com/macros/s/AKfycbye_92ucUMSn98GYUErN1CIbATHn5AWU1-4NRpMkiaHE67DrNuHbgUV7xsZWkbRl53V/exec";
 
 let tray = null;
 let mainWindow = null;
@@ -51,7 +51,7 @@ function getTodayStr() {
 }
 
 // HTTP GET 요청 (순차 전송용)
-function sendSyncRequest(action, name, timeStr = null, logDate = null) {
+function sendSyncRequest(action, name, timeStr = null, logDate = null, extraParams = '') {
     if (!name) return Promise.resolve();
     
     return new Promise((resolve, reject) => {
@@ -65,9 +65,9 @@ function sendSyncRequest(action, name, timeStr = null, logDate = null) {
         }
         
         const timeParam = action === 'recordBoot' ? `bootTime=${encodeURIComponent(timeStr)}` : `offTime=${encodeURIComponent(timeStr)}`;
-        const urlString = `${GAS_URL}?action=${action}&name=${encodeURIComponent(name)}&${timeParam}&logDate=${encodeURIComponent(logDate)}&isDesktop=true&t=${Date.now()}`;
+        const urlString = `${GAS_URL}?action=${action}&name=${encodeURIComponent(name)}&${timeParam}&logDate=${encodeURIComponent(logDate)}&isDesktop=true${extraParams}&t=${Date.now()}`;
         
-        console.log(`Sending ${action} for ${name} at ${timeStr} (logDate: ${logDate})`);
+        console.log(`Sending ${action} for ${name} at ${timeStr} (logDate: ${logDate})${extraParams ? ' [' + extraParams + ']' : ''}`);
         
         if (app.isReady()) {
             const request = net.request(urlString);
@@ -523,24 +523,43 @@ function stopShutdownWatcher() {
 }
 
 // ============================================================
-// Heartbeat: 30초마다 현재 시간을 서버에 offTime으로 전송
+// Heartbeat: 60초마다 현재 시간을 서버에 offTime으로 전송
 // PC가 갑자기 종료되어도 마지막 heartbeat 시간이 종료 시간으로 기록됨
-// (최대 오차: 30초)
+// (최대 오차: 60초)
+// 서버 측에서 isHeartbeat=true & isDesktop=true 조건으로
+// 웹 로그인과 구분하여 퇴근시간 갱신 문제 방지
 // ============================================================
 function startHeartbeat(name) {
-    // 사용자 혼란(로그인 시 퇴근시간 갱신되는 것처럼 보임)으로 인해 기능 완전 비활성화
-    return;
+    if (!name) return;
+    if (heartbeatInterval) {
+        console.log("[Heartbeat] Already running.");
+        return;
+    }
+    console.log("[Heartbeat] Starting heartbeat (60s interval)...");
+    // 즉시 첫 번째 heartbeat 전송
+    sendHeartbeat(name);
+    // 60초마다 반복 전송
+    heartbeatInterval = setInterval(() => sendHeartbeat(name), 60000);
 }
 
 function sendHeartbeat(name) {
-    // 기능 비활성화
-    return;
+    if (!name) return;
+    const timeStr = formatDateTimeNow();
+    const logDate = timeStr.substring(0, 10);
+    
+    // isHeartbeat=true 파라미터를 추가하여 서버에서 구분 가능하게 함
+    sendSyncRequest('recordOff', name, timeStr, logDate, '&isHeartbeat=true').then(() => {
+        console.log(`[Heartbeat] Sent offTime: ${timeStr}`);
+    }).catch(err => {
+        console.error("[Heartbeat] Failed:", err);
+    });
 }
 
 function stopHeartbeat() {
     if (heartbeatInterval) {
         clearInterval(heartbeatInterval);
         heartbeatInterval = null;
+        console.log("[Heartbeat] Stopped.");
     }
 }
 
@@ -622,8 +641,9 @@ app.whenReady().then(() => {
         // 3. 실시간 종료 이벤트 감시 시작
         startShutdownWatcher(config.name);
         
-        // 4. Heartbeat 시작 (30초마다 offTime 갱신 - 실시간 종료 시간 반영 핵심)
-        // startHeartbeat(config.name); // 사용자 혼란(로그인 시 퇴근시간 갱신되는 것처럼 보임)으로 인해 비활성화
+        // 4. Heartbeat 시작 (60초마다 offTime 갱신 - 실시간 종료 시간 반영 핵심)
+        // isHeartbeat=true & isDesktop=true 플래그로 웹 로그인과 구분하여 퇴근시간 갱신 문제 방지
+        startHeartbeat(config.name);
         
         // 5. 1분마다 정기 동기화 수행 (6006 이벤트 실시간 반영)
         setInterval(() => {
@@ -642,8 +662,8 @@ app.whenReady().then(() => {
             setTimeout(() => syncEventLogs(config.name), 2000);
             // watcher가 죽었을 수 있으므로 재시작
             startShutdownWatcher(config.name);
-            // heartbeat 재시작 (사용자 혼란 방지 위해 비활성화)
-            // startHeartbeat(config.name);
+            // heartbeat 재시작 (절전 복귀 후 즉시 현재 시간 갱신)
+            startHeartbeat(config.name);
         });
 
         // OS 종료/재시작 감지 (Electron의 shutdown 이벤트)
@@ -771,10 +791,10 @@ app.on('before-quit', (e) => {
     if (isOsShutdown && !isDelayingQuit) {
         e.preventDefault();
         isDelayingQuit = true;
-        console.log("Delaying before-quit by 2 seconds to allow HTTP requests to complete.");
+        console.log("Delaying before-quit by 3 seconds to allow HTTP requests to complete.");
         setTimeout(() => {
             app.quit();
-        }, 2000);
+        }, 3000);
     }
 });
 
@@ -782,17 +802,17 @@ app.on('session-end', (e) => {
     // OS 세션 종료 시 (로그오프, 종료, 재시작) — OS 종료 플래그 설정 및 offTime 기록
     isOsShutdown = true;
     
-    // Windows에서 앱 종료를 지연시켜 curl/powershell 백그라운드 전송이 완료될 시간을 확보 (최대 2초)
+    // Windows에서 앱 종료를 지연시켜 curl/powershell 백그라운드 전송이 완료될 시간을 확보 (최대 3초)
     if (e) e.preventDefault();
     
     if (shutdownHandled) {
-        setTimeout(() => { app.quit(); }, 2000);
+        setTimeout(() => { app.quit(); }, 3000);
         return;
     }
     
     const config = getUserConfig();
     if (config.name) {
-        console.log("System session ending (logoff/shutdown/restart). Delaying quit by 2 seconds to ensure HTTP requests complete.");
+        console.log("System session ending (logoff/shutdown/restart). Delaying quit by 3 seconds to ensure HTTP requests complete.");
         sendSyncShutdownRequest('recordOff', config.name);
         shutdownHandled = true;
         

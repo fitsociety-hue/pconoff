@@ -206,7 +206,15 @@ function recordOffTime(e) {
     var name = e.parameter.name;
     var offTime = e.parameter.offTime;
     var logDate = e.parameter.logDate;
+    var isHeartbeat = e.parameter.isHeartbeat === 'true';
+    var isDesktop = e.parameter.isDesktop === 'true';
     var dateStr = logDate ? logDate : getTodayString();
+    
+    // Heartbeat 요청은 반드시 데스크탑 앱(isDesktop=true)에서만 허용
+    // 웹 브라우저 로그인 시 offTime이 변경되는 문제 방지
+    if (isHeartbeat && !isDesktop) {
+      return ContentService.createTextOutput(JSON.stringify({"status": "ignored", "message": "Heartbeat는 데스크탑 앱에서만 허용됩니다."})).setMimeType(ContentService.MimeType.JSON);
+    }
     
     var sheet = getSheet("Logs");
     var data = sheet.getDataRange().getValues();
@@ -231,7 +239,14 @@ function recordOffTime(e) {
           
           if (!isNaN(newDate.getTime())) {
             if (!isNaN(oldDate.getTime())) {
-              if (newDate >= oldDate) shouldUpdate = true;
+              if (isHeartbeat) {
+                // Heartbeat: 기존 offTime보다 새 offTime이 더 늦은 경우에만 갱신
+                // 정확한 종료 이벤트(shutdown/session-end)가 이미 기록한 시간을 보호
+                if (newDate > oldDate) shouldUpdate = true;
+              } else {
+                // 종료 이벤트: 기존 offTime보다 같거나 늦으면 갱신 (기존 로직 유지)
+                if (newDate >= oldDate) shouldUpdate = true;
+              }
             } else {
               // 문자열 파싱 실패 시(예: "11시 30분 38초" 등), 새로운 유효한 시간이면 무조건 덮어씌움
               shouldUpdate = true;
