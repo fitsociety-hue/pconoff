@@ -656,7 +656,7 @@ app.whenReady().then(() => {
         startShutdownWatcher(config.name);
         
         // 4. Heartbeat 시작 (30초마다 offTime 갱신 - 실시간 종료 시간 반영 핵심)
-        startHeartbeat(config.name);
+        // startHeartbeat(config.name); // 사용자 혼란(로그인 시 퇴근시간 갱신되는 것처럼 보임)으로 인해 비활성화
         
         // 5. 1분마다 정기 동기화 수행 (6006 이벤트 실시간 반영)
         setInterval(() => {
@@ -675,8 +675,8 @@ app.whenReady().then(() => {
             setTimeout(() => syncEventLogs(config.name), 2000);
             // watcher가 죽었을 수 있으므로 재시작
             startShutdownWatcher(config.name);
-            // heartbeat 재시작
-            startHeartbeat(config.name);
+            // heartbeat 재시작 (사용자 혼란 방지 위해 비활성화)
+            // startHeartbeat(config.name);
         });
 
         // OS 종료/재시작 감지 (Electron의 shutdown 이벤트)
