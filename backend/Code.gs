@@ -60,7 +60,7 @@ function getSheet(sheetName) {
       // 기본 관리자 추가 (비밀번호: 2026의 SHA-256 해시값 필요)
       // 프론트에서 '2026'을 해시해서 보내도록 해야함
     } else if (sheetName === "Logs") {
-      sheet.appendRow(["Date", "Name", "BootTime", "OffTime", "OvertimeApplied"]);
+      sheet.appendRow(["Date", "Name", "BootTime", "OffTime", "OvertimeApplied", "LastSeen"]);
     } else if (sheetName === "AdminSettings") {
       sheet.appendRow(["AdminId", "PasswordHash"]);
       // 2026의 SHA-256 해시는 프론트에서 생성하는 값과 매칭해야 하므로, 초기엔 프론트에서 가입 시키거나 해시값을 넣어야함.
@@ -182,6 +182,10 @@ function recordBootTime(e) {
           var bootCell = sheet.getRange(i + 1, 3);
           bootCell.setNumberFormat('@');
           bootCell.setValue(bootTime);
+          
+          // 부팅 시 과거 날짜의 빈 OffTime을 LastSeen으로 보정
+          _fillMissingOffTimeFromLastSeen(sheet, data, name, dateStr);
+          
           return ContentService.createTextOutput(JSON.stringify({"status": "success", "message": "데스크탑 부팅 시간으로 업데이트 완료"})).setMimeType(ContentService.MimeType.JSON);
         }
         // 이미 부팅 기록이 있다면 업데이트하지 않고 기존 유지
@@ -189,13 +193,44 @@ function recordBootTime(e) {
       }
     }
     
-    sheet.appendRow([dateStr, name, bootTime, "", "No"]);
+    sheet.appendRow([dateStr, name, bootTime, "", "No", ""]);
     var newRow = sheet.getLastRow();
     sheet.getRange(newRow, 3).setNumberFormat('@');
     sheet.getRange(newRow, 4).setNumberFormat('@');
+    
+    // 부팅 시 과거 날짜의 빈 OffTime을 LastSeen으로 보정
+    if (e.parameter.isDesktop === 'true') {
+      var freshData = sheet.getDataRange().getValues();
+      _fillMissingOffTimeFromLastSeen(sheet, freshData, name, dateStr);
+    }
+    
     return ContentService.createTextOutput(JSON.stringify({"status": "success", "message": "부팅 시간 기록 완료"})).setMimeType(ContentService.MimeType.JSON);
   } finally {
     lock.releaseLock();
+  }
+}
+
+// 과거 날짜에 OffTime이 비어있지만 LastSeen이 있는 경우, LastSeen을 OffTime으로 복사
+// (PC 종료 시 실시간 전송이 실패했을 때의 백업 보정 로직)
+function _fillMissingOffTimeFromLastSeen(sheet, data, name, todayStr) {
+  var tz = Session.getScriptTimeZone();
+  for (var j = 1; j < data.length; j++) {
+    if (String(data[j][1]).trim() != name) continue;
+    
+    var rowDate = data[j][0] instanceof Date ? Utilities.formatDate(data[j][0], tz, "yyyy-MM-dd") : String(data[j][0]).substring(0, 10);
+    if (rowDate == todayStr) continue; // 오늘 날짜는 건너뜀
+    
+    var rowOffTime = String(data[j][3]).trim();
+    var rowLastSeen = data[j].length > 5 ? String(data[j][5]).trim() : '';
+    
+    var offTimeEmpty = (!rowOffTime || rowOffTime === '' || rowOffTime === '-');
+    var lastSeenExists = (rowLastSeen && rowLastSeen !== '' && rowLastSeen !== '-');
+    
+    if (offTimeEmpty && lastSeenExists) {
+      var offCell = sheet.getRange(j + 1, 4);
+      offCell.setNumberFormat('@');
+      offCell.setValue(data[j][5]); // 원본 값 사용
+    }
   }
 }
 
@@ -211,7 +246,6 @@ function recordOffTime(e) {
     var dateStr = logDate ? logDate : getTodayString();
     
     // Heartbeat 요청은 반드시 데스크탑 앱(isDesktop=true)에서만 허용
-    // 웹 브라우저 로그인 시 offTime이 변경되는 문제 방지
     if (isHeartbeat && !isDesktop) {
       return ContentService.createTextOutput(JSON.stringify({"status": "ignored", "message": "Heartbeat는 데스크탑 앱에서만 허용됩니다."})).setMimeType(ContentService.MimeType.JSON);
     }
@@ -222,6 +256,16 @@ function recordOffTime(e) {
     for (var i = data.length - 1; i >= 1; i--) {
       var rowDateStr = data[i][0] instanceof Date ? Utilities.formatDate(data[i][0], Session.getScriptTimeZone(), "yyyy-MM-dd") : String(data[i][0]).substring(0, 10);
       if (rowDateStr == dateStr && data[i][1] == name) {
+        
+        // ===== Heartbeat: LastSeen 컬럼(6번째)에만 기록, OffTime은 절대 건드리지 않음 =====
+        if (isHeartbeat) {
+          var lastSeenCell = sheet.getRange(i + 1, 6);
+          lastSeenCell.setNumberFormat('@');
+          lastSeenCell.setValue(offTime);
+          return ContentService.createTextOutput(JSON.stringify({"status": "success", "message": "LastSeen 기록 완료"})).setMimeType(ContentService.MimeType.JSON);
+        }
+        
+        // ===== 실제 종료 이벤트: OffTime 컬럼(4번째)에 기록 =====
         var existingOffTimeValue = sheet.getRange(i + 1, 4).getValue();
         var existingOffTime = "";
         if (existingOffTimeValue instanceof Date) {
@@ -239,26 +283,16 @@ function recordOffTime(e) {
           
           if (!isNaN(newDate.getTime())) {
             if (!isNaN(oldDate.getTime())) {
-              if (isHeartbeat) {
-                // Heartbeat: 기존 offTime보다 새 offTime이 더 늦은 경우에만 갱신
-                // 정확한 종료 이벤트(shutdown/session-end)가 이미 기록한 시간을 보호
-                if (newDate > oldDate) shouldUpdate = true;
-              } else {
-                // 종료 이벤트: 기존 offTime보다 같거나 늦으면 갱신 (기존 로직 유지)
-                if (newDate >= oldDate) shouldUpdate = true;
-              }
+              if (newDate >= oldDate) shouldUpdate = true;
             } else {
-              // 문자열 파싱 실패 시(예: "11시 30분 38초" 등), 새로운 유효한 시간이면 무조건 덮어씌움
               shouldUpdate = true;
             }
           } else {
-            // Fallback
             if (String(offTime) > existingOffTime) shouldUpdate = true;
           }
         }
         
         if (shouldUpdate) {
-          // 문자열 형식으로 강제 저장하여 구글 스프레드시트가 Date 객체로 자동 변환하여 초 단위를 잃어버리는 문제 방지
           var offCell = sheet.getRange(i + 1, 4);
           offCell.setNumberFormat('@');
           offCell.setValue(offTime);
@@ -267,9 +301,19 @@ function recordOffTime(e) {
       }
     }
     
-    // 오늘자 부팅 기록이 없을 경우, 퇴근 기록이라도 남기기 위해 새 행 추가
-    sheet.appendRow([dateStr, name, "-", offTime, "No"]);
-    // 새 행도 문자열 형식으로 강제 설정
+    // 오늘자 부팅 기록이 없을 경우
+    if (isHeartbeat) {
+      // Heartbeat: LastSeen만 기록, OffTime은 비워둠
+      sheet.appendRow([dateStr, name, "-", "", "No", offTime]);
+      var newRow = sheet.getLastRow();
+      sheet.getRange(newRow, 3).setNumberFormat('@');
+      sheet.getRange(newRow, 4).setNumberFormat('@');
+      sheet.getRange(newRow, 6).setNumberFormat('@');
+      return ContentService.createTextOutput(JSON.stringify({"status": "success", "message": "LastSeen 기록 완료 (새 행)"})).setMimeType(ContentService.MimeType.JSON);
+    }
+    
+    // 실제 종료 이벤트: OffTime에 기록
+    sheet.appendRow([dateStr, name, "-", offTime, "No", ""]);
     var newRow = sheet.getLastRow();
     sheet.getRange(newRow, 3).setNumberFormat('@');
     sheet.getRange(newRow, 4).setNumberFormat('@');
@@ -283,6 +327,7 @@ function getStats(e) {
   var logData = logSheet.getDataRange().getValues();
   var logs = [];
   var tz = Session.getScriptTimeZone();
+  var todayStr = getTodayString();
   
   for (var i = 1; i < logData.length; i++) {
     // 날짜 포맷팅: Date 객체인 경우 명시적으로 yyyy-MM-dd 형식으로 변환
@@ -301,6 +346,20 @@ function getStats(e) {
     var offTimeVal = logData[i][3];
     if (offTimeVal instanceof Date) {
       offTimeVal = Utilities.formatDate(offTimeVal, tz, "yyyy-MM-dd HH:mm:ss");
+    }
+    
+    // LastSeen 컬럼 (6번째, index 5) 읽기
+    var lastSeenVal = logData[i].length > 5 ? logData[i][5] : '';
+    if (lastSeenVal instanceof Date) {
+      lastSeenVal = Utilities.formatDate(lastSeenVal, tz, "yyyy-MM-dd HH:mm:ss");
+    }
+    
+    // 과거 날짜에 OffTime이 비어있지만 LastSeen이 있으면, LastSeen을 OffTime 대신 표시
+    // (PC 종료 시 실시간 전송이 실패하고, 아직 다음 부팅도 안 한 경우의 백업)
+    var offTimeEmpty = (!offTimeVal || String(offTimeVal).trim() === '' || String(offTimeVal).trim() === '-');
+    var lastSeenExists = (lastSeenVal && String(lastSeenVal).trim() !== '' && String(lastSeenVal).trim() !== '-');
+    if (offTimeEmpty && lastSeenExists && String(dateVal) !== todayStr) {
+      offTimeVal = lastSeenVal;
     }
     
     logs.push({
