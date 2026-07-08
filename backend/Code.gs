@@ -354,28 +354,46 @@ function getStats(e) {
       lastSeenVal = Utilities.formatDate(lastSeenVal, tz, "yyyy-MM-dd HH:mm:ss");
     }
     
-    // 당일인 경우 PC가 아직 켜져 있을 수 있으므로 LastSeen을 퇴근 시간으로 덮어쓰지 않음.
-    // 과거 날짜(어제 이전)에 대해서만 PC 비정상 종료 등을 고려하여 LastSeen을 퇴근 시간으로 보정함.
     var offTimeEmpty = (!offTimeVal || String(offTimeVal).trim() === '' || String(offTimeVal).trim() === '-');
     var lastSeenExists = (lastSeenVal && String(lastSeenVal).trim() !== '' && String(lastSeenVal).trim() !== '-');
     var isToday = (String(dateVal) === todayStr);
     
-    if (lastSeenExists && !isToday) {
-      if (offTimeEmpty) {
-        offTimeVal = lastSeenVal;
-      } else {
-        // 둘 다 있을 경우 시간 비교 후 최신 값 선택
-        var offDateObj = new Date(String(offTimeVal).replace(' ', 'T'));
-        var lastSeenObj = new Date(String(lastSeenVal).replace(' ', 'T'));
-        
-        if (!isNaN(offDateObj.getTime()) && !isNaN(lastSeenObj.getTime())) {
-          if (lastSeenObj > offDateObj) {
-            offTimeVal = lastSeenVal;
-          }
+    // PC가 현재 켜져 있는지(최근 1.5분 이내 하트비트) 확인
+    var isPcCurrentlyOn = false;
+    if (lastSeenExists && isToday) {
+      var nowStr = Utilities.formatDate(new Date(), tz, "yyyy-MM-dd HH:mm:ss");
+      var nowObj = new Date(nowStr.replace(' ', 'T'));
+      var lsObjCheck = new Date(String(lastSeenVal).replace(' ', 'T'));
+      
+      if (!isNaN(lsObjCheck.getTime()) && !isNaN(nowObj.getTime())) {
+        var diffSeconds = (nowObj.getTime() - lsObjCheck.getTime()) / 1000;
+        // 하트비트가 90초 이내면 PC가 켜져 있는 것으로 간주 (미래 시간인 경우 음수이므로 포함)
+        if (diffSeconds <= 90) {
+          isPcCurrentlyOn = true;
+        }
+      }
+    }
+    
+    if (lastSeenExists) {
+      // PC가 켜져 있으면(최근 1.5분 이내 하트비트), LastSeen이 계속 갱신되므로 퇴근 시간으로 덮어쓰지 않음 (실시간 틱 오류 방지)
+      // PC가 꺼져 있거나 과거 날짜인 경우에만 LastSeen을 퇴근 시간으로 반영 (실시간 모니터링)
+      if (!isPcCurrentlyOn) {
+        if (offTimeEmpty) {
+          offTimeVal = lastSeenVal;
         } else {
-          // Date 변환 실패 시 문자열 비교로 대체
-          if (String(lastSeenVal) > String(offTimeVal)) {
-            offTimeVal = lastSeenVal;
+          // 둘 다 있을 경우 시간 비교 후 최신 값 선택
+          var offDateObj = new Date(String(offTimeVal).replace(' ', 'T'));
+          var lsObj = new Date(String(lastSeenVal).replace(' ', 'T'));
+          
+          if (!isNaN(offDateObj.getTime()) && !isNaN(lsObj.getTime())) {
+            if (lsObj > offDateObj) {
+              offTimeVal = lastSeenVal;
+            }
+          } else {
+            // Date 변환 실패 시 문자열 비교로 대체
+            if (String(lastSeenVal) > String(offTimeVal)) {
+              offTimeVal = lastSeenVal;
+            }
           }
         }
       }

@@ -7,7 +7,7 @@ const { exec, spawn } = require('child_process');
 const SHUTDOWN_CACHE_PATH = path.join(app.getPath('userData'), 'shutdown_cache.json');
 
 const CONFIG_PATH = path.join(app.getPath('userData'), 'user_config.json');
-const GAS_URL = "https://script.google.com/macros/s/AKfycbwznHx75qVNvcMtvkgSQZmyf5SNQoD8x4Y4eoiL144ewvyY1i_adDQAtrlV0rLBW8Pi/exec";
+const GAS_URL = "https://script.google.com/macros/s/AKfycbyjuamlEgt6t5mTAafwOKhK3sKjZDSbriPsyoBljFQHY4LorAkmb7BMN0wyHVWK6rV0/exec";
 
 let tray = null;
 let mainWindow = null;
