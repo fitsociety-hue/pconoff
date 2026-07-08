@@ -354,12 +354,13 @@ function getStats(e) {
       lastSeenVal = Utilities.formatDate(lastSeenVal, tz, "yyyy-MM-dd HH:mm:ss");
     }
     
-    // 과거/당일 상관없이 OffTime과 LastSeen을 비교하여 더 최신(늦은) 시간을 퇴근 시간으로 반영
-    // (PC 종료 시 실시간 전송이 실패하더라도, 1분 주기로 갱신되는 LastSeen을 통해 실시간 퇴근시간 보정)
+    // 당일인 경우 PC가 아직 켜져 있을 수 있으므로 LastSeen을 퇴근 시간으로 덮어쓰지 않음.
+    // 과거 날짜(어제 이전)에 대해서만 PC 비정상 종료 등을 고려하여 LastSeen을 퇴근 시간으로 보정함.
     var offTimeEmpty = (!offTimeVal || String(offTimeVal).trim() === '' || String(offTimeVal).trim() === '-');
     var lastSeenExists = (lastSeenVal && String(lastSeenVal).trim() !== '' && String(lastSeenVal).trim() !== '-');
+    var isToday = (String(dateVal) === todayStr);
     
-    if (lastSeenExists) {
+    if (lastSeenExists && !isToday) {
       if (offTimeEmpty) {
         offTimeVal = lastSeenVal;
       } else {
