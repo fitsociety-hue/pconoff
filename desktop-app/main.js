@@ -50,6 +50,17 @@ function getTodayStr() {
     return `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}`;
 }
 
+// 파일 로깅 유틸리티 (필수-3)
+function logToFile(message) {
+    try {
+        const logPath = path.join(app.getPath('userData'), 'app.log');
+        const timeStr = formatDateTimeNow();
+        fs.appendFileSync(logPath, `[${timeStr}] ${message}\n`);
+    } catch (e) {
+        console.error("Failed to write to log file:", e);
+    }
+}
+
 // HTTP GET 요청 (순차 전송용)
 function sendSyncRequest(action, name, timeStr = null, logDate = null, extraParams = '') {
     if (!name) return Promise.resolve();
@@ -67,22 +78,33 @@ function sendSyncRequest(action, name, timeStr = null, logDate = null, extraPara
         const timeParam = action === 'recordBoot' ? `bootTime=${encodeURIComponent(timeStr)}` : `offTime=${encodeURIComponent(timeStr)}`;
         const urlString = `${GAS_URL}?action=${action}&name=${encodeURIComponent(name)}&${timeParam}&logDate=${encodeURIComponent(logDate)}&isDesktop=true${extraParams}&t=${Date.now()}`;
         
-        console.log(`Sending ${action} for ${name} at ${timeStr} (logDate: ${logDate})${extraParams ? ' [' + extraParams + ']' : ''}`);
+        const logMsg = `Sending ${action} for ${name} at ${timeStr} (logDate: ${logDate})${extraParams ? ' [' + extraParams + ']' : ''}`;
+        console.log(logMsg);
+        logToFile(`[SyncRequest] ${logMsg}`);
         
         if (app.isReady()) {
             const request = net.request(urlString);
             request.on('response', (response) => {
                 let data = '';
                 response.on('data', (chunk) => data += chunk);
-                response.on('end', () => resolve(data));
+                response.on('end', () => {
+                    logToFile(`[SyncRequest] Success ${action} at ${timeStr}`);
+                    resolve(data);
+                });
             });
             request.on('error', (err) => {
                 console.error(`Failed to send ${action}:`, err);
+                logToFile(`[SyncRequest] ERROR ${action} at ${timeStr}: ${err.message}`);
                 resolve(); // 실패해도 Promise 체인이 깨지지 않도록 resolve 처리
             });
             request.end();
         } else {
             exec(`curl.exe -s -L "${urlString}"`, { encoding: 'utf-8' }, (error, stdout) => {
+                if (error) {
+                    logToFile(`[SyncRequest] curl ERROR ${action} at ${timeStr}: ${error.message}`);
+                } else {
+                    logToFile(`[SyncRequest] curl Success ${action} at ${timeStr}`);
+                }
                 resolve(stdout || '');
             });
         }
@@ -146,8 +168,10 @@ function sendSyncShutdownRequest(action, name) {
             });
             child.unref();
             console.log(`[Shutdown] Spawned detached curl for ${action} at ${timeStr}`);
+            logToFile(`[Shutdown] Spawned detached curl for ${action} at ${timeStr}`);
         } catch(e) {
             console.error("[Shutdown] curl.exe spawn failed:", e.message);
+            logToFile(`[Shutdown] curl.exe spawn failed: ${e.message}`);
         }
         
         // 방법 2: detached powershell (curl 실패 대비 동시 실행)
@@ -162,11 +186,14 @@ function sendSyncShutdownRequest(action, name) {
             });
             child2.unref();
             console.log(`[Shutdown] Spawned detached powershell for ${action} at ${timeStr}`);
+            logToFile(`[Shutdown] Spawned detached powershell for ${action} at ${timeStr}`);
         } catch(e2) {
             console.error("[Shutdown] powershell spawn failed:", e2.message);
+            logToFile(`[Shutdown] powershell spawn failed: ${e2.message}`);
         }
     } catch(e) {
         console.error("Sync shutdown request failed", e);
+        logToFile(`[Shutdown] Sync shutdown request failed: ${e.message}`);
     }
 }
 
@@ -377,7 +404,8 @@ function syncLastShutdownTime(name) {
 
 // ============================================================
 // 실시간 Windows 이벤트 로그 감시 (PowerShell 기반)
-// 종료 이벤트 발생 시 즉시 서버에 전송
+// [권장-5] 이 워쳐는 성공 시 조기 신호(Early Signal)일 뿐이며, 
+// 실시간성의 최종 보장 수단은 하트비트(Heartbeat)입니다.
 // ============================================================
 function startShutdownWatcher(name) {
     if (!name) return;
@@ -523,9 +551,9 @@ function stopShutdownWatcher() {
 }
 
 // ============================================================
-// Heartbeat: 60초마다 현재 시간을 서버에 offTime으로 전송
+// Heartbeat: 15초마다 현재 시간을 서버에 offTime으로 전송 (필수-1)
 // PC가 갑자기 종료되어도 마지막 heartbeat 시간이 종료 시간으로 기록됨
-// (최대 오차: 60초)
+// (최대 오차: 15초)
 // 서버 측에서 isHeartbeat=true & isDesktop=true 조건으로
 // 웹 로그인과 구분하여 퇴근시간 갱신 문제 방지
 // ============================================================
@@ -535,11 +563,12 @@ function startHeartbeat(name) {
         console.log("[Heartbeat] Already running.");
         return;
     }
-    console.log("[Heartbeat] Starting heartbeat (60s interval)...");
+    console.log("[Heartbeat] Starting heartbeat (15s interval)...");
+    logToFile("[Heartbeat] Started (15s interval)");
     // 즉시 첫 번째 heartbeat 전송
     sendHeartbeat(name);
-    // 60초마다 반복 전송
-    heartbeatInterval = setInterval(() => sendHeartbeat(name), 60000);
+    // 15초마다 반복 전송
+    heartbeatInterval = setInterval(() => sendHeartbeat(name), 15000);
 }
 
 function sendHeartbeat(name) {
@@ -550,8 +579,10 @@ function sendHeartbeat(name) {
     // isHeartbeat=true 파라미터를 추가하여 서버에서 구분 가능하게 함
     sendSyncRequest('recordOff', name, timeStr, logDate, '&isHeartbeat=true').then(() => {
         console.log(`[Heartbeat] Sent offTime: ${timeStr}`);
+        logToFile(`[Heartbeat] Sent offTime: ${timeStr}`);
     }).catch(err => {
         console.error("[Heartbeat] Failed:", err);
+        logToFile(`[Heartbeat] Failed: ${err.message}`);
     });
 }
 
@@ -791,10 +822,11 @@ app.on('before-quit', (e) => {
     if (isOsShutdown && !isDelayingQuit) {
         e.preventDefault();
         isDelayingQuit = true;
-        console.log("Delaying before-quit by 3 seconds to allow HTTP requests to complete.");
+        console.log("Delaying before-quit by 2 seconds to allow HTTP requests to complete.");
+        logToFile("[before-quit] Delaying quit by 2 seconds.");
         setTimeout(() => {
             app.quit();
-        }, 3000);
+        }, 2000);
     }
 });
 
@@ -802,20 +834,23 @@ app.on('session-end', (e) => {
     // OS 세션 종료 시 (로그오프, 종료, 재시작) — OS 종료 플래그 설정 및 offTime 기록
     isOsShutdown = true;
     
-    // Windows에서 앱 종료를 지연시켜 curl/powershell 백그라운드 전송이 완료될 시간을 확보 (최대 3초)
     if (e) e.preventDefault();
     
     if (shutdownHandled) {
-        setTimeout(() => { app.quit(); }, 3000);
+        console.log("[session-end] Already handled, quitting immediately.");
+        logToFile("[session-end] Already handled, quitting immediately.");
+        app.quit();
         return;
     }
     
     const config = getUserConfig();
     if (config.name) {
-        console.log("System session ending (logoff/shutdown/restart). Delaying quit by 3 seconds to ensure HTTP requests complete.");
+        console.log("System session ending (logoff/shutdown/restart). Delaying quit by 2 seconds to ensure HTTP requests complete.");
+        logToFile("[session-end] Delaying quit by 2 seconds.");
         sendSyncShutdownRequest('recordOff', config.name);
         shutdownHandled = true;
         
+        isDelayingQuit = true; // before-quit에서의 중복 지연 방지 (필수-2)
         setTimeout(() => {
             app.quit();
         }, 2000);
