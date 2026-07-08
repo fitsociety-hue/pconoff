@@ -354,12 +354,30 @@ function getStats(e) {
       lastSeenVal = Utilities.formatDate(lastSeenVal, tz, "yyyy-MM-dd HH:mm:ss");
     }
     
-    // 과거 날짜에 OffTime이 비어있지만 LastSeen이 있으면, LastSeen을 OffTime 대신 표시
-    // (PC 종료 시 실시간 전송이 실패하고, 아직 다음 부팅도 안 한 경우의 백업)
+    // 과거/당일 상관없이 OffTime과 LastSeen을 비교하여 더 최신(늦은) 시간을 퇴근 시간으로 반영
+    // (PC 종료 시 실시간 전송이 실패하더라도, 1분 주기로 갱신되는 LastSeen을 통해 실시간 퇴근시간 보정)
     var offTimeEmpty = (!offTimeVal || String(offTimeVal).trim() === '' || String(offTimeVal).trim() === '-');
     var lastSeenExists = (lastSeenVal && String(lastSeenVal).trim() !== '' && String(lastSeenVal).trim() !== '-');
-    if (offTimeEmpty && lastSeenExists && String(dateVal) !== todayStr) {
-      offTimeVal = lastSeenVal;
+    
+    if (lastSeenExists) {
+      if (offTimeEmpty) {
+        offTimeVal = lastSeenVal;
+      } else {
+        // 둘 다 있을 경우 시간 비교 후 최신 값 선택
+        var offDateObj = new Date(String(offTimeVal).replace(' ', 'T'));
+        var lastSeenObj = new Date(String(lastSeenVal).replace(' ', 'T'));
+        
+        if (!isNaN(offDateObj.getTime()) && !isNaN(lastSeenObj.getTime())) {
+          if (lastSeenObj > offDateObj) {
+            offTimeVal = lastSeenVal;
+          }
+        } else {
+          // Date 변환 실패 시 문자열 비교로 대체
+          if (String(lastSeenVal) > String(offTimeVal)) {
+            offTimeVal = lastSeenVal;
+          }
+        }
+      }
     }
     
     logs.push({
