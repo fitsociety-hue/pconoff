@@ -1,7 +1,9 @@
 !macro customInit
   ; 프로세스 강제 종료
-  nsExec::ExecToStack 'taskkill /F /IM "onoff-monitor.exe" /T'
-  nsExec::ExecToStack 'taskkill /F /IM "출퇴근기록앱.exe" /T'
+  nsExec::Exec 'taskkill /F /IM "onoff-monitor.exe" /T'
+  Pop $0
+  nsExec::Exec 'taskkill /F /IM "출퇴근기록앱.exe" /T'
+  Pop $0
   
   ReadRegStr $R0 HKCU "${UNINSTALL_REGISTRY_KEY}" "UninstallString"
   ReadRegStr $R1 HKCU "${UNINSTALL_REGISTRY_KEY}" "InstallLocation"
@@ -37,8 +39,10 @@
 
 !macro customUnInstall
   ; 프로세스 강제 종료
-  nsExec::ExecToStack 'taskkill /F /IM "onoff-monitor.exe" /T'
-  nsExec::ExecToStack 'taskkill /F /IM "출퇴근기록앱.exe" /T'
+  nsExec::Exec 'taskkill /F /IM "onoff-monitor.exe" /T'
+  Pop $0
+  nsExec::Exec 'taskkill /F /IM "출퇴근기록앱.exe" /T'
+  Pop $0
 
   RMDir /r "$APPDATA\onoff-monitor"
   RMDir /r "$LOCALAPPDATA\onoff-monitor"
